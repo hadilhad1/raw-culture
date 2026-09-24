@@ -1,6 +1,7 @@
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import OrderDetailsModal from './components/OrderDetailsModal';
+import AdminOrderDetailsPage from './pages/AdminOrderDetailsPage';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api');
 
@@ -443,6 +444,7 @@ function ProductFormPage() {
 }
 
 function AdminOrdersPage() {
+  const navigate = useNavigate();
   const { orderId } = useParams();
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState('');
@@ -490,7 +492,7 @@ function AdminOrdersPage() {
           </thead>
           <tbody>
             {orders.map((order) => (
-              <tr key={order.id} className="cursor-pointer border-t border-white/10 transition hover:bg-white/5" onClick={() => setSelectedOrder(order)}>
+              <tr key={order.id} className="cursor-pointer border-t border-white/10 transition hover:bg-white/5" onClick={() => navigate(`/admin/orders/${encodeURIComponent(order.orderNumber || order.id)}`)}>
                 <td className="py-3 pr-4 font-mono font-semibold">#{order.orderNumber || order.id}</td>
                 <td className="py-3 pr-4"><div>{order.name || order.customer?.name || 'Anonymous'}</div><div className="text-xs text-white/50">{order.email || order.customer?.email}</div></td>
                 <td className="py-3 pr-4 text-white/70">{order.phone || order.customer?.phone || 'N/A'}</td>
@@ -498,7 +500,7 @@ function AdminOrdersPage() {
                 <td className="py-3 pr-4"><div className="uppercase">{order.paymentMethod === 'cod' ? 'COD' : 'ONLINE'}</div><div className="text-xs text-white/50">{order.paymentStatus}</div></td>
                 <td className="py-3 pr-4">${Number(order.total || 0).toFixed(2)}</td>
                 <td className="py-3 pr-4" onClick={(event) => event.stopPropagation()}><select value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)} className="rounded-lg border border-white/10 bg-[#1d2124] px-2 py-1"><option>PENDING</option><option>CONFIRMED</option><option>PROCESSING</option><option>SHIPPED</option><option>DELIVERED</option><option>CANCELLED</option></select></td>
-                <td className="py-3 text-right"><button type="button" onClick={() => setSelectedOrder(order)} className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wider hover:bg-raw-accent">View Order</button></td>
+                <td className="py-3 text-right"><button type="button" onClick={() => navigate(`/admin/orders/${encodeURIComponent(order.orderNumber || order.id)}`)} className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wider hover:bg-raw-accent">View Order</button></td>
               </tr>
             ))}
           </tbody>
@@ -715,7 +717,7 @@ function AdminApp() {
       <Route path="/admin/collections" element={<AdminLayout><AdminCollectionsPage /></AdminLayout>} />
       <Route path="/admin/inventory" element={<AdminLayout><AdminInventoryPage /></AdminLayout>} />
       <Route path="/admin/orders" element={<AdminLayout><AdminOrdersPage /></AdminLayout>} />
-      <Route path="/admin/orders/:orderId" element={<AdminLayout><AdminOrdersPage /></AdminLayout>} />
+      <Route path="/admin/orders/:orderId" element={<AdminLayout><AdminOrderDetailsPage /></AdminLayout>} />
       <Route path="/admin/customers" element={<AdminLayout><AdminCustomersPage /></AdminLayout>} />
       <Route path="/admin/content" element={<AdminLayout><AdminContentPage /></AdminLayout>} />
       <Route path="/admin/media" element={<AdminLayout><AdminMediaPage /></AdminLayout>} />
