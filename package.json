@@ -15,6 +15,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace frontend\" \"npm run dev --workspace admin\" \"npm run dev --workspace backend\"",
     "build": "npm run build --workspace frontend",
+    "deploy": "npm run deploy --workspace frontend",
     "start": "concurrently \"npm run preview --workspace frontend\" \"npm run preview --workspace admin\" \"npm run start --workspace backend\""
   },
   "devDependencies": {
