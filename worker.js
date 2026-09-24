@@ -19,49 +19,6 @@ function json(data, status = 200) {
   });
 }
 
-const PRODUCT_IMAGE_TYPES = new Map([
-  ['image/jpeg', 'jpg'],
-  ['image/png', 'png'],
-  ['image/webp', 'webp'],
-]);
-
-async function mediaApi(request, url, env) {
-  if (!env.PRODUCT_MEDIA_BUCKET) return json({ message: 'Product image storage is not configured' }, 503);
-
-  if (request.method === 'POST' && url.pathname === '/api/uploads') {
-    if (!request.headers.get('Authorization')?.startsWith('Bearer ')) {
-      return json({ message: 'Admin authentication is required for image uploads' }, 401);
-    }
-
-    const formData = await request.formData();
-    const file = formData.get('file');
-    if (!(file instanceof File) || !file.size) return json({ message: 'Choose an image file to upload' }, 400);
-    if (file.size > 10 * 1024 * 1024) return json({ message: 'Image files must be 10 MB or smaller' }, 400);
-
-    const extension = PRODUCT_IMAGE_TYPES.get(file.type);
-    if (!extension) return json({ message: 'Only JPG, PNG, and WEBP images are supported' }, 400);
-
-    const key = `products/${crypto.randomUUID()}.${extension}`;
-    await env.PRODUCT_MEDIA_BUCKET.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=31536000, immutable' },
-    });
-    return json({ key, url: `/media/${key}`, name: file.name, size: file.size, type: file.type }, 201);
-  }
-
-  if (request.method === 'GET' && url.pathname.startsWith('/media/')) {
-    const key = decodeURIComponent(url.pathname.slice('/media/'.length));
-    const object = await env.PRODUCT_MEDIA_BUCKET.get(key);
-    if (!object) return new Response('Image not found', { status: 404 });
-    const headers = new Headers();
-    object.writeHttpMetadata(headers);
-    headers.set('etag', object.httpEtag);
-    headers.set('cache-control', 'public, max-age=31536000, immutable');
-    return new Response(object.body, { headers });
-  }
-
-  return null;
-}
-
 function buildSlug(value) {
   return String(value || '')
     .toLowerCase()

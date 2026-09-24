@@ -12,7 +12,6 @@ export default function ProductFormPage() {
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [urlDraft, setUrlDraft] = useState('');
   const [dragIndex, setDragIndex] = useState(null);
   const [error, setError] = useState('');
@@ -33,7 +32,7 @@ export default function ProductFormPage() {
     sizes: 'S, M, L, XL',
     colors: 'Black, White',
     tags: 'streetwear, 2026',
-    images: [],
+    imageUrls: [''],
     videoUrls: [''],
     featured: false,
     newArrival: true,
@@ -82,7 +81,7 @@ export default function ProductFormPage() {
           sizes: Array.isArray(data.sizes) ? data.sizes.join(', ') : data.sizes || '',
           colors: Array.isArray(data.colors) ? data.colors.join(', ') : data.colors || '',
           tags: Array.isArray(data.tags) ? data.tags.join(', ') : data.tags || '',
-          images: data.images?.length ? data.images.map((img) => ({ id: img.id || crypto.randomUUID(), url: img.url, source: 'saved' })) : [],
+          imageUrls: data.images?.length ? data.images.map((img) => img.url) : [''],
           videoUrls: data.videos?.length ? data.videos.map((vid) => vid.url) : [''],
           featured: Boolean(data.featured),
           newArrival: Boolean(data.newArrival),
@@ -95,65 +94,34 @@ export default function ProductFormPage() {
       .finally(() => setLoading(false));
   }, [id, isEditing, API_URL]);
 
-  const updateImages = (images) => setFormData((prev) => ({ ...prev, images }));
-
   const addImageUrl = () => {
     const url = urlDraft.trim();
     if (!url) return setError('Paste an image URL before adding it.');
     if (!url.startsWith('/') && !/^https?:\/\/[^\s]+$/i.test(url)) {
       return setError('Enter a valid http(s) image URL or a local path.');
     }
-    updateImages([...formData.images, { id: crypto.randomUUID(), url, source: 'url' }]);
+    setFormData((prev) => ({ ...prev, imageUrls: [...prev.imageUrls.filter(Boolean), url] }));
     setUrlDraft('');
     setError('');
   };
 
-  const removeImage = (id) => updateImages(formData.images.filter((image) => image.id !== id));
+  const updateImageUrl = (index, value) => {
+    const imageUrls = [...formData.imageUrls];
+    imageUrls[index] = value;
+    setFormData((prev) => ({ ...prev, imageUrls }));
+  };
 
-  const setPrimaryImage = (index) => {
-    const images = [...formData.images];
-    const [primary] = images.splice(index, 1);
-    updateImages([primary, ...images]);
+  const removeImage = (index) => {
+    const imageUrls = formData.imageUrls.filter((_, imageIndex) => imageIndex !== index);
+    setFormData((prev) => ({ ...prev, imageUrls: imageUrls.length ? imageUrls : [''] }));
   };
 
   const moveImage = (from, to) => {
-    if (to < 0 || to >= formData.images.length) return;
-    const images = [...formData.images];
-    const [image] = images.splice(from, 1);
-    images.splice(to, 0, image);
-    updateImages(images);
-  };
-
-  const handleImageFiles = async (fileList) => {
-    const files = Array.from(fileList || []);
-    if (!files.length) return setError('Choose at least one image file.');
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    const invalid = files.find((file) => !allowed.includes(file.type));
-    if (invalid) return setError(`${invalid.name} is not JPG, PNG, or WEBP.`);
-    const tooLarge = files.find((file) => file.size > 10 * 1024 * 1024);
-    if (tooLarge) return setError(`${tooLarge.name} is larger than 10 MB.`);
-
-    const pending = files.map((file) => ({ id: crypto.randomUUID(), url: URL.createObjectURL(file), source: 'upload', pending: true, name: file.name }));
-    updateImages([...formData.images, ...pending]);
-    setUploading(true);
-    setError('');
-    try {
-      for (const [index, file] of files.entries()) {
-        const item = pending[index];
-        const body = new FormData();
-        body.append('file', file);
-        const response = await fetch(`${API_URL}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.message || 'Image upload failed.');
-        setFormData((prev) => ({ ...prev, images: prev.images.map((image) => image.id === item.id ? { ...image, url: data.url, pending: false } : image) }));
-        URL.revokeObjectURL(item.url);
-      }
-    } catch (err) {
-      setError(err.message || 'Image upload failed.');
-      setFormData((prev) => ({ ...prev, images: prev.images.filter((image) => !pending.some((item) => item.id === image.id && item.pending)) }));
-    } finally {
-      setUploading(false);
-    }
+    if (to < 0 || to >= formData.imageUrls.length) return;
+    const imageUrls = [...formData.imageUrls];
+    const [image] = imageUrls.splice(from, 1);
+    imageUrls.splice(to, 0, image);
+    setFormData((prev) => ({ ...prev, imageUrls }));
   };
 
   const handleSubmit = async (e) => {
@@ -188,7 +156,7 @@ export default function ProductFormPage() {
       sizes: formData.sizes.split(',').map((s) => s.trim()).filter(Boolean),
       colors: formData.colors.split(',').map((c) => c.trim()).filter(Boolean),
       tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-      imageUrls: formData.images.filter((image) => image.url && !image.pending).map((image) => image.url.trim()).filter(Boolean),
+      imageUrls: formData.imageUrls.map((url) => url.trim()).filter(Boolean),
       videoUrls: formData.videoUrls.map((v) => v.trim()).filter(Boolean),
       featured: formData.featured,
       newArrival: formData.newArrival,
@@ -513,60 +481,32 @@ export default function ProductFormPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-raw-accent/50 bg-raw-accent/5 px-5 text-center transition hover:bg-raw-accent/10">
-              <span className="text-sm font-bold uppercase tracking-wider text-white">+ Upload Images</span>
-              <span className="mt-1 text-[11px] text-white/45">JPG, PNG, WEBP up to 10 MB each</span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => { handleImageFiles(e.target.files); e.target.value = ''; }} />
-            </label>
-            <div className="rounded-2xl border border-white/10 bg-[#121417] p-4">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">Add Image URL</p>
-              <div className="flex gap-2">
-                <input
-                  value={urlDraft}
-                  onChange={(e) => setUrlDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addImageUrl(); } }}
-                  placeholder="https://example.com/image.jpg"
-                  className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#0e1012] px-3 py-2.5 text-xs text-white outline-none focus:border-raw-accent"
-                />
-                <button type="button" onClick={addImageUrl} className="rounded-xl bg-white/10 px-3 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-raw-accent">Add</button>
-              </div>
-              <p className="mt-2 text-[10px] text-white/35">External URLs are saved as-is and previewed before save.</p>
+          <div className="rounded-2xl border border-white/10 bg-[#121417] p-4">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">Add Image URL</p>
+            <div className="flex gap-2">
+              <input
+                value={urlDraft}
+                onChange={(e) => setUrlDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addImageUrl(); } }}
+                placeholder="https://example.com/image.jpg"
+                className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#0e1012] px-3 py-2.5 text-xs text-white outline-none focus:border-raw-accent"
+              />
+              <button type="button" onClick={addImageUrl} className="rounded-xl bg-white/10 px-3 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-raw-accent">Add URL</button>
             </div>
+            <p className="mt-2 text-[10px] text-white/35">Image URLs are saved in D1 and the first URL is the primary image.</p>
           </div>
 
-          {uploading && <p className="mt-4 text-xs text-raw-accent">Uploading images securely...</p>}
-
-          {formData.images.length === 0 ? (
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] py-10 text-center text-xs text-white/35">No product images yet. Upload files or add an image URL.</div>
-          ) : (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {formData.images.map((image, idx) => (
-                <div
-                  key={image.id}
-                  draggable={!image.pending}
-                  onDragStart={() => setDragIndex(idx)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => { if (dragIndex !== null) moveImage(dragIndex, idx); setDragIndex(null); }}
-                  className="overflow-hidden rounded-2xl border border-white/10 bg-[#121417]"
-                >
-                  <div className="relative aspect-square bg-white/5">
-                    <img src={image.url} alt={image.name || `Product image ${idx + 1}`} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.opacity = '0.25'; }} />
-                    <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[9px] uppercase tracking-wider text-white/70">{idx === 0 ? 'Primary' : image.source === 'upload' ? 'Upload' : 'URL'}</span>
-                    {image.pending && <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[10px] uppercase tracking-wider text-white">Uploading</span>}
-                  </div>
-                  <div className="flex items-center justify-between gap-1 p-2">
-                    <button type="button" disabled={idx === 0 || image.pending} onClick={() => setPrimaryImage(idx)} className="text-[9px] uppercase tracking-wider text-white/55 hover:text-raw-accent disabled:opacity-30">Set primary</button>
-                    <button type="button" onClick={() => removeImage(image.id)} className="text-[9px] uppercase tracking-wider text-red-300/70 hover:text-red-300">Remove</button>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-white/5 px-2 py-1.5 text-white/35">
-                    <button type="button" disabled={idx === 0} onClick={() => moveImage(idx, idx - 1)} aria-label="Move image left">←</button>
-                    <span className="text-[9px] uppercase tracking-wider">Drag to reorder</span>
-                    <button type="button" disabled={idx === formData.images.length - 1} onClick={() => moveImage(idx, idx + 1)} aria-label="Move image right">→</button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="mt-4 space-y-3">
+            {formData.imageUrls.map((url, idx) => (
+              <div key={`${idx}-${url}`} className="flex items-center gap-3">
+                <span className="w-6 text-center text-xs text-white/40">{idx + 1}</span>
+                {url ? <img src={url} alt={`Product image ${idx + 1}`} className="h-14 w-12 shrink-0 rounded-lg border border-white/10 object-cover" onError={(e) => { e.currentTarget.style.opacity = '0.25'; }} /> : <div className="h-14 w-12 shrink-0 rounded-lg border border-white/10 bg-white/5" />}
+                <input value={url} onChange={(e) => updateImageUrl(idx, e.target.value)} placeholder="https://example.com/image.jpg or /products/tshirt/front.jpg" className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#121417] px-4 py-2.5 text-xs text-white outline-none focus:border-raw-accent" />
+                <button type="button" disabled={idx === 0} onClick={() => moveImage(idx, idx - 1)} className="text-xs text-white/50 hover:text-white disabled:opacity-25" aria-label="Move image up">↑</button>
+                <button type="button" disabled={idx === formData.imageUrls.length - 1} onClick={() => moveImage(idx, idx + 1)} className="text-xs text-white/50 hover:text-white disabled:opacity-25" aria-label="Move image down">↓</button>
+                <button type="button" onClick={() => removeImage(idx)} className="rounded-lg p-2 text-white/40 hover:text-red-400" aria-label="Remove image">✕</button>
+              </div>
+            ))}
           </div>
         </div>
 
