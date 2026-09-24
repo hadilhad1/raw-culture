@@ -638,7 +638,20 @@ async function databaseApi(request, url, db) {
     const id = path.split('/')[2];
     const b = await request.json();
     await db.prepare('UPDATE orders SET status = ?, payment_status = COALESCE(?, payment_status), tracking_number = COALESCE(?, tracking_number), shipping_provider = COALESCE(?, shipping_provider), notes = COALESCE(?, notes) WHERE id = ? OR order_number = ?').bind(b.status, b.paymentStatus || null, b.trackingNumber || null, b.shippingProvider || null, b.notes || null, id, id).run();
-    return json({ success: true, status: b.status });
+    const updated = await db.prepare('SELECT id, order_number AS orderNumber, email, name, phone, shipping_address AS shippingAddress, items, total, subtotal, shipping_fee AS shippingFee, discount, status, payment_status AS paymentStatus, payment_method AS paymentMethod, tracking_number AS trackingNumber, shipping_provider AS shippingProvider, notes, created_at AS createdAt FROM orders WHERE id = ? OR order_number = ?').bind(id, id).first();
+    if (!updated) return json({ message: 'Order not found' }, 404);
+    const parsedShipping = JSON.parse(updated.shippingAddress || '{}');
+    return json({
+      ...updated,
+      customer: { name: updated.name, email: updated.email, phone: updated.phone },
+      shippingAddress: {
+        ...parsedShipping,
+        street: parsedShipping.street || parsedShipping.line1 || '',
+        apartment: parsedShipping.apartment || parsedShipping.line2 || '',
+        postalCode: parsedShipping.postalCode || parsedShipping.postal_code || '',
+      },
+      items: JSON.parse(updated.items || '[]'),
+    });
   }
 
   // Customers

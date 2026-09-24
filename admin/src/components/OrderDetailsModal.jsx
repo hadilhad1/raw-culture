@@ -158,8 +158,8 @@ export default function OrderDetailsModal({ order, onClose, onOrderUpdated }) {
               </h3>
               <div className="space-y-1 text-white/80">
                 <p className="font-semibold text-white">{addr.name || currentOrder.name}</p>
-                <p>{addr.line1 || 'No street address provided'}</p>
-                {addr.line2 && <p>{addr.line2}</p>}
+                <p>{addr.street || addr.line1 || 'No street address provided'}</p>
+                {(addr.apartment || addr.line2) && <p>{addr.apartment || addr.line2}</p>}
                 <p>
                   {addr.city ? `${addr.city}, ` : ''}
                   {addr.state ? `${addr.state} ` : ''}
@@ -218,10 +218,10 @@ export default function OrderDetailsModal({ order, onClose, onOrderUpdated }) {
                           {item.color || 'Standard'}
                         </span>
                       </td>
-                      <td className="py-3 pr-4 text-white/80">₹{Number(item.price).toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-white/80">₹{Number(item.price || item.unitPrice || 0).toFixed(2)}</td>
                       <td className="py-3 pr-4 font-bold text-white">{item.quantity}</td>
                       <td className="py-3 text-right font-semibold text-white">
-                        ₹{Number(item.price * item.quantity).toFixed(2)}
+                        ₹{Number(item.total ?? ((item.price || item.unitPrice || 0) * item.quantity)).toFixed(2)}
                       </td>
                     </tr>
                   ))}

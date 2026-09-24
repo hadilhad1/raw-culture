@@ -1,5 +1,6 @@
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import OrderDetailsModal from './components/OrderDetailsModal';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api');
 
@@ -442,19 +443,27 @@ function ProductFormPage() {
 }
 
 function AdminOrdersPage() {
+  const { orderId } = useParams();
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState(null);
   useEffect(() => {
     fetch(`${API_URL}/orders`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then((res) => res.json())
-      .then((data) => setOrders(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const loadedOrders = Array.isArray(data) ? data : [];
+        setOrders(loadedOrders);
+        if (orderId) setSelectedOrder(loadedOrders.find((order) => order.id === orderId || order.orderNumber === orderId) || null);
+      })
       .catch(() => setOrders([]));
-  }, []);
+  }, [orderId]);
 
   const updateStatus = async (orderId, status) => {
     const response = await fetch(`${API_URL}/orders/${orderId}/status`, { method: 'PATCH', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    if (!response.ok) { setError('Unable to update order status.'); return; }
-    setOrders((items) => items.map((order) => order.id === orderId ? { ...order, status } : order));
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) { setError(data.message || 'Unable to update order status.'); return; }
+    setOrders((items) => items.map((order) => order.id === orderId ? { ...order, ...data, status } : order));
+    setSelectedOrder((order) => order?.id === orderId ? { ...order, ...data, status } : order);
   };
 
   return (
@@ -465,29 +474,38 @@ function AdminOrdersPage() {
       </header>
       {error && <p className="rounded-xl bg-red-500/10 p-3 text-red-300">{error}</p>}
       <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
+        <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="text-white/60">
             <tr>
               <th className="py-3 pr-4">Order ID</th>
               <th className="py-3 pr-4">Customer</th>
+              <th className="py-3 pr-4">Phone</th>
               <th className="py-3 pr-4">Date</th>
+              <th className="py-3 pr-4">Payment</th>
               <th className="py-3 pr-4">Total</th>
               <th className="py-3 pr-4">Status</th>
+              <th className="py-3 text-right">Details</th>
             </tr>
           </thead>
           <tbody>
             {orders.map((order) => (
-              <tr key={order.id} className="border-t border-white/10">
-                <td className="py-3 pr-4">{order.orderNumber}</td>
-                <td className="py-3 pr-4">{order.email}</td>
-                <td className="py-3 pr-4">{new Date(order.createdAt).toLocaleDateString()}</td>
+              <tr key={order.id} className="cursor-pointer border-t border-white/10 transition hover:bg-white/5" onClick={() => setSelectedOrder(order)}>
+                <td className="py-3 pr-4 font-mono font-semibold">#{order.orderNumber || order.id}</td>
+                <td className="py-3 pr-4"><div>{order.name || order.customer?.name || 'Anonymous'}</div><div className="text-xs text-white/50">{order.email || order.customer?.email}</div></td>
+                <td className="py-3 pr-4 text-white/70">{order.phone || order.customer?.phone || 'N/A'}</td>
+                <td className="py-3 pr-4 text-white/70">{new Date(order.createdAt).toLocaleString()}</td>
+                <td className="py-3 pr-4"><div className="uppercase">{order.paymentMethod === 'cod' ? 'COD' : 'ONLINE'}</div><div className="text-xs text-white/50">{order.paymentStatus}</div></td>
                 <td className="py-3 pr-4">${Number(order.total || 0).toFixed(2)}</td>
-                <td className="py-3 pr-4"><select value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)} className="rounded-lg border border-white/10 bg-[#1d2124] px-2 py-1"><option>PENDING</option><option>CONFIRMED</option><option>PROCESSING</option><option>SHIPPED</option><option>DELIVERED</option><option>CANCELLED</option></select></td>
+                <td className="py-3 pr-4" onClick={(event) => event.stopPropagation()}><select value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)} className="rounded-lg border border-white/10 bg-[#1d2124] px-2 py-1"><option>PENDING</option><option>CONFIRMED</option><option>PROCESSING</option><option>SHIPPED</option><option>DELIVERED</option><option>CANCELLED</option></select></td>
+                <td className="py-3 text-right"><button type="button" onClick={() => setSelectedOrder(order)} className="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-wider hover:bg-raw-accent">View Order</button></td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
+      {selectedOrder && <OrderDetailsModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onOrderUpdated={(updated) => { setSelectedOrder(updated); setOrders((items) => items.map((order) => order.id === updated.id ? updated : order)); }} />}
     </div>
   );
 }
