@@ -175,14 +175,6 @@ function ProductCard({ product, onAdd, onWishlist, wished }) {
         >
           {wished ? '♥' : '♡'}
         </motion.button>
-        <motion.button
-          type="button"
-          onClick={handleAddToCart}
-          whileTap={{ scale: 0.96 }}
-          className="absolute bottom-4 left-4 z-10 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100"
-        >
-          {isAdded ? 'Added!' : 'Add to cart'}
-        </motion.button>
       </div>
       <div className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-2">
@@ -195,10 +187,22 @@ function ProductCard({ product, onAdd, onWishlist, wished }) {
             {product.compareAtPrice && <p className="text-xs text-black/45 line-through">{currency(product.compareAtPrice)}</p>}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.15em] text-black/60">
-          {(product.colors || []).slice(0, 3).map((color) => (
-            <span key={color} className="rounded-full border border-black/10 px-2 py-1">{color}</span>
-          ))}
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.15em] text-black/60">
+            {(product.colors || []).slice(0, 3).map((color) => (
+              <span key={color} className="rounded-full border border-black/10 px-2 py-1">{color}</span>
+            ))}
+          </div>
+          <motion.button
+            type="button"
+            onClick={handleAddToCart}
+            whileTap={{ scale: 0.96 }}
+            whileHover={{ scale: 1.02 }}
+            className="rounded-full bg-black px-3 py-2 text-[9px] font-medium uppercase tracking-[0.18em] text-white transition hover:bg-raw-accent"
+          >
+            {isAdded ? 'Added' : 'Add'}
+          </motion.button>
         </div>
       </div>
     </motion.article>

@@ -445,10 +445,10 @@ function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState('');
   useEffect(() => {
-    fetch(`${API_URL}/orders`)
+    fetch(`${API_URL}/orders`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then((res) => res.json())
-      .then((data) => setOrders(data))
-      .catch(() => {});
+      .then((data) => setOrders(Array.isArray(data) ? data : []))
+      .catch(() => setOrders([]));
   }, []);
 
   const updateStatus = async (orderId, status) => {
@@ -697,6 +697,7 @@ function AdminApp() {
       <Route path="/admin/collections" element={<AdminLayout><AdminCollectionsPage /></AdminLayout>} />
       <Route path="/admin/inventory" element={<AdminLayout><AdminInventoryPage /></AdminLayout>} />
       <Route path="/admin/orders" element={<AdminLayout><AdminOrdersPage /></AdminLayout>} />
+      <Route path="/admin/orders/:orderId" element={<AdminLayout><AdminOrdersPage /></AdminLayout>} />
       <Route path="/admin/customers" element={<AdminLayout><AdminCustomersPage /></AdminLayout>} />
       <Route path="/admin/content" element={<AdminLayout><AdminContentPage /></AdminLayout>} />
       <Route path="/admin/media" element={<AdminLayout><AdminMediaPage /></AdminLayout>} />

@@ -532,25 +532,28 @@ async function databaseApi(request, url, db) {
     let calculatedSubtotal = 0;
 
     for (const item of body.items) {
-      const product = await db.prepare('SELECT id, name, sku, price, sale_price, stock FROM products WHERE id = ?').bind(item.productId).first();
+      const product = await db.prepare('SELECT id, name, sku, price, sale_price, stock, category FROM products WHERE id = ?').bind(item.productId).first();
       const unitPrice = product ? Number(product.sale_price || product.price) : Number(item.price);
-      calculatedSubtotal += unitPrice * Number(item.quantity);
+      const quantity = Number(item.quantity || 1);
+      calculatedSubtotal += unitPrice * quantity;
 
       fullItems.push({
         productId: item.productId,
         name: item.name,
         sku: item.sku || product?.sku || 'N/A',
+        category: item.category || product?.category || 'Streetwear',
         image: item.image || '',
         size: item.size || 'Standard',
         color: item.color || 'Standard',
-        quantity: Number(item.quantity),
+        variant: item.variant || item.color || 'Standard',
+        variantId: item.variantId || item.productId,
+        quantity,
         price: unitPrice,
-        total: unitPrice * Number(item.quantity),
+        total: unitPrice * quantity,
       });
 
-      // Decrement stock
       if (product) {
-        const remaining = Math.max(0, product.stock - Number(item.quantity));
+        const remaining = Math.max(0, product.stock - quantity);
         await db.prepare('UPDATE products SET stock = ?, status = ? WHERE id = ?').bind(remaining, remaining === 0 ? 'OUT_OF_STOCK' : remaining < 10 ? 'LOW_STOCK' : 'IN_STOCK', item.productId).run();
       }
     }
@@ -558,6 +561,19 @@ async function databaseApi(request, url, db) {
     const discount = Number(body.discount || 0);
     const shippingFee = Number(body.shippingFee || 0);
     const grandTotal = Math.max(0, calculatedSubtotal - discount + shippingFee);
+    const paymentMethod = body.paymentMethod || 'cod';
+    const paymentStatus = paymentMethod === 'online' ? 'PAID' : 'PENDING';
+    const shippingSnapshot = {
+      street: body.shippingAddress?.line1 || body.shippingAddress?.street || '',
+      apartment: body.shippingAddress?.line2 || body.shippingAddress?.apartment || '',
+      city: body.shippingAddress?.city || '',
+      state: body.shippingAddress?.state || '',
+      postalCode: body.shippingAddress?.postalCode || '',
+      country: body.shippingAddress?.country || 'India',
+      name: body.name || '',
+      email: body.email || '',
+      phone: body.phone || '',
+    };
 
     await db.prepare('INSERT INTO orders (id, order_number, email, name, phone, shipping_address, items, subtotal, shipping_fee, discount, total, payment_method, payment_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(
       orderId,
@@ -565,28 +581,38 @@ async function databaseApi(request, url, db) {
       body.email,
       body.name,
       body.phone || '',
-      JSON.stringify(body.shippingAddress || {}),
+      JSON.stringify({ ...shippingSnapshot, ...body.shippingAddress }),
       JSON.stringify(fullItems),
       calculatedSubtotal,
       shippingFee,
       discount,
       grandTotal,
-      body.paymentMethod || 'cod',
-      body.paymentMethod === 'online' ? 'PAID' : 'PENDING',
+      paymentMethod,
+      paymentStatus,
       'PENDING'
     ).run();
 
-    return json({ id: orderId, orderNumber, status: 'PENDING', paymentStatus: body.paymentMethod === 'online' ? 'PAID' : 'PENDING', total: grandTotal }, 201);
+    return json({ id: orderId, orderNumber, status: 'PENDING', paymentStatus, total: grandTotal }, 201);
   }
 
   if (request.method === 'GET' && path === '/orders') {
     const result = await db.prepare('SELECT id, order_number AS orderNumber, email, name, phone, total, subtotal, shipping_fee AS shippingFee, discount, status, payment_status AS paymentStatus, payment_method AS paymentMethod, shipping_address AS shippingAddress, items, created_at AS createdAt FROM orders ORDER BY created_at DESC').all();
     return json(
-      result.results.map((o) => ({
-        ...o,
-        shippingAddress: JSON.parse(o.shippingAddress || '{}'),
-        items: JSON.parse(o.items || '[]'),
-      }))
+      result.results.map((o) => {
+        const parsedShipping = JSON.parse(o.shippingAddress || '{}');
+        const parsedItems = JSON.parse(o.items || '[]');
+        return {
+          ...o,
+          customer: { name: o.name, email: o.email, phone: o.phone },
+          shippingAddress: {
+            ...parsedShipping,
+            street: parsedShipping.street || parsedShipping.line1 || '',
+            apartment: parsedShipping.apartment || parsedShipping.line2 || '',
+            postalCode: parsedShipping.postalCode || parsedShipping.postal_code || '',
+          },
+          items: parsedItems,
+        };
+      })
     );
   }
 
@@ -594,10 +620,17 @@ async function databaseApi(request, url, db) {
     const id = path.split('/').pop();
     const order = await db.prepare('SELECT id, order_number AS orderNumber, email, name, phone, shipping_address AS shippingAddress, items, total, subtotal, shipping_fee AS shippingFee, discount, status, payment_status AS paymentStatus, payment_method AS paymentMethod, tracking_number AS trackingNumber, shipping_provider AS shippingProvider, notes, created_at AS createdAt FROM orders WHERE id = ? OR order_number = ?').bind(id, id).first();
     if (!order) return json({ message: 'Order not found' }, 404);
+    const parsedShipping = JSON.parse(order.shippingAddress || '{}');
     return json({
       ...order,
+      customer: { name: order.name, email: order.email, phone: order.phone },
+      shippingAddress: {
+        ...parsedShipping,
+        street: parsedShipping.street || parsedShipping.line1 || '',
+        apartment: parsedShipping.apartment || parsedShipping.line2 || '',
+        postalCode: parsedShipping.postalCode || parsedShipping.postal_code || '',
+      },
       items: JSON.parse(order.items || '[]'),
-      shippingAddress: JSON.parse(order.shippingAddress || '{}'),
     });
   }
 
