@@ -858,7 +858,7 @@ export default {
 
     // Handle Admin SPA routing
     if (isAdminRoute(url.pathname) && !url.pathname.match(/\.[^/]+$/)) {
-      const adminUrl = new URL('/admin/index.html', request.url);
+      const adminUrl = new URL('/admin/', request.url);
       return env.ASSETS.fetch(new Request(adminUrl, request));
     }
 
