@@ -13,3 +13,7 @@ directory = "./frontend/dist"
 binding = "raw_culture_db"
 database_name = "raw-culture-db"
 database_id = "d36983ba-9b33-4eb5-bca6-70cc17241bce"
+
+[[r2_buckets]]
+binding = "PRODUCT_MEDIA_BUCKET"
+bucket_name = "raw-culture-product-media"

@@ -12,6 +12,9 @@ export default function ProductFormPage() {
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [urlDraft, setUrlDraft] = useState('');
+  const [dragIndex, setDragIndex] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -30,7 +33,7 @@ export default function ProductFormPage() {
     sizes: 'S, M, L, XL',
     colors: 'Black, White',
     tags: 'streetwear, 2026',
-    imageUrls: [''],
+    images: [],
     videoUrls: [''],
     featured: false,
     newArrival: true,
@@ -79,7 +82,7 @@ export default function ProductFormPage() {
           sizes: Array.isArray(data.sizes) ? data.sizes.join(', ') : data.sizes || '',
           colors: Array.isArray(data.colors) ? data.colors.join(', ') : data.colors || '',
           tags: Array.isArray(data.tags) ? data.tags.join(', ') : data.tags || '',
-          imageUrls: data.images?.length ? data.images.map((img) => img.url) : [''],
+          images: data.images?.length ? data.images.map((img) => ({ id: img.id || crypto.randomUUID(), url: img.url, source: 'saved' })) : [],
           videoUrls: data.videos?.length ? data.videos.map((vid) => vid.url) : [''],
           featured: Boolean(data.featured),
           newArrival: Boolean(data.newArrival),
@@ -92,19 +95,65 @@ export default function ProductFormPage() {
       .finally(() => setLoading(false));
   }, [id, isEditing, API_URL]);
 
-  const handleImageUrlChange = (index, value) => {
-    const updated = [...formData.imageUrls];
-    updated[index] = value;
-    setFormData({ ...formData, imageUrls: updated });
+  const updateImages = (images) => setFormData((prev) => ({ ...prev, images }));
+
+  const addImageUrl = () => {
+    const url = urlDraft.trim();
+    if (!url) return setError('Paste an image URL before adding it.');
+    if (!url.startsWith('/') && !/^https?:\/\/[^\s]+$/i.test(url)) {
+      return setError('Enter a valid http(s) image URL or a local path.');
+    }
+    updateImages([...formData.images, { id: crypto.randomUUID(), url, source: 'url' }]);
+    setUrlDraft('');
+    setError('');
   };
 
-  const addImageField = () => {
-    setFormData({ ...formData, imageUrls: [...formData.imageUrls, ''] });
+  const removeImage = (id) => updateImages(formData.images.filter((image) => image.id !== id));
+
+  const setPrimaryImage = (index) => {
+    const images = [...formData.images];
+    const [primary] = images.splice(index, 1);
+    updateImages([primary, ...images]);
   };
 
-  const removeImageField = (index) => {
-    const updated = formData.imageUrls.filter((_, i) => i !== index);
-    setFormData({ ...formData, imageUrls: updated.length ? updated : [''] });
+  const moveImage = (from, to) => {
+    if (to < 0 || to >= formData.images.length) return;
+    const images = [...formData.images];
+    const [image] = images.splice(from, 1);
+    images.splice(to, 0, image);
+    updateImages(images);
+  };
+
+  const handleImageFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return setError('Choose at least one image file.');
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    const invalid = files.find((file) => !allowed.includes(file.type));
+    if (invalid) return setError(`${invalid.name} is not JPG, PNG, or WEBP.`);
+    const tooLarge = files.find((file) => file.size > 10 * 1024 * 1024);
+    if (tooLarge) return setError(`${tooLarge.name} is larger than 10 MB.`);
+
+    const pending = files.map((file) => ({ id: crypto.randomUUID(), url: URL.createObjectURL(file), source: 'upload', pending: true, name: file.name }));
+    updateImages([...formData.images, ...pending]);
+    setUploading(true);
+    setError('');
+    try {
+      for (const [index, file] of files.entries()) {
+        const item = pending[index];
+        const body = new FormData();
+        body.append('file', file);
+        const response = await fetch(`${API_URL}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Image upload failed.');
+        setFormData((prev) => ({ ...prev, images: prev.images.map((image) => image.id === item.id ? { ...image, url: data.url, pending: false } : image) }));
+        URL.revokeObjectURL(item.url);
+      }
+    } catch (err) {
+      setError(err.message || 'Image upload failed.');
+      setFormData((prev) => ({ ...prev, images: prev.images.filter((image) => !pending.some((item) => item.id === image.id && item.pending)) }));
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -139,7 +188,7 @@ export default function ProductFormPage() {
       sizes: formData.sizes.split(',').map((s) => s.trim()).filter(Boolean),
       colors: formData.colors.split(',').map((c) => c.trim()).filter(Boolean),
       tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-      imageUrls: formData.imageUrls.map((u) => u.trim()).filter(Boolean),
+      imageUrls: formData.images.filter((image) => image.url && !image.pending).map((image) => image.url.trim()).filter(Boolean),
       videoUrls: formData.videoUrls.map((v) => v.trim()).filter(Boolean),
       featured: formData.featured,
       newArrival: formData.newArrival,
@@ -460,50 +509,64 @@ export default function ProductFormPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-bold text-white">Product Images</h2>
-              <p className="text-xs text-white/50">Primary image is shown first in the catalog</p>
+              <p className="text-xs text-white/50">The first image is the primary catalog image</p>
             </div>
-            <button
-              type="button"
-              onClick={addImageField}
-              className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs uppercase tracking-wider text-white hover:bg-white/10"
-            >
-              + Add Image URL
-            </button>
           </div>
 
-          <div className="space-y-3">
-            {formData.imageUrls.map((url, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                <span className="text-xs text-white/40 w-6 text-center">{idx + 1}</span>
-                {url ? (
-                  <img
-                    src={url}
-                    alt="Preview"
-                    className="h-12 w-10 shrink-0 rounded-lg object-cover border border-white/10"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                ) : (
-                  <div className="h-12 w-10 shrink-0 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white/30">
-                    N/A
-                  </div>
-                )}
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-raw-accent/50 bg-raw-accent/5 px-5 text-center transition hover:bg-raw-accent/10">
+              <span className="text-sm font-bold uppercase tracking-wider text-white">+ Upload Images</span>
+              <span className="mt-1 text-[11px] text-white/45">JPG, PNG, WEBP up to 10 MB each</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(e) => { handleImageFiles(e.target.files); e.target.value = ''; }} />
+            </label>
+            <div className="rounded-2xl border border-white/10 bg-[#121417] p-4">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">Add Image URL</p>
+              <div className="flex gap-2">
                 <input
-                  value={url}
-                  onChange={(e) => handleImageUrlChange(idx, e.target.value)}
-                  placeholder="https://example.com/image.jpg or /products/tshirt/front.jpg"
-                  className="flex-1 rounded-xl border border-white/15 bg-[#121417] px-4 py-2.5 text-xs text-white outline-none focus:border-raw-accent"
+                  value={urlDraft}
+                  onChange={(e) => setUrlDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addImageUrl(); } }}
+                  placeholder="https://example.com/image.jpg"
+                  className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#0e1012] px-3 py-2.5 text-xs text-white outline-none focus:border-raw-accent"
                 />
-                {formData.imageUrls.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeImageField(idx)}
-                    className="rounded-lg p-2 text-white/40 hover:text-red-400"
-                  >
-                    ✕
-                  </button>
-                )}
+                <button type="button" onClick={addImageUrl} className="rounded-xl bg-white/10 px-3 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-raw-accent">Add</button>
               </div>
-            ))}
+              <p className="mt-2 text-[10px] text-white/35">External URLs are saved as-is and previewed before save.</p>
+            </div>
+          </div>
+
+          {uploading && <p className="mt-4 text-xs text-raw-accent">Uploading images securely...</p>}
+
+          {formData.images.length === 0 ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] py-10 text-center text-xs text-white/35">No product images yet. Upload files or add an image URL.</div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {formData.images.map((image, idx) => (
+                <div
+                  key={image.id}
+                  draggable={!image.pending}
+                  onDragStart={() => setDragIndex(idx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => { if (dragIndex !== null) moveImage(dragIndex, idx); setDragIndex(null); }}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-[#121417]"
+                >
+                  <div className="relative aspect-square bg-white/5">
+                    <img src={image.url} alt={image.name || `Product image ${idx + 1}`} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.opacity = '0.25'; }} />
+                    <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[9px] uppercase tracking-wider text-white/70">{idx === 0 ? 'Primary' : image.source === 'upload' ? 'Upload' : 'URL'}</span>
+                    {image.pending && <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-[10px] uppercase tracking-wider text-white">Uploading</span>}
+                  </div>
+                  <div className="flex items-center justify-between gap-1 p-2">
+                    <button type="button" disabled={idx === 0 || image.pending} onClick={() => setPrimaryImage(idx)} className="text-[9px] uppercase tracking-wider text-white/55 hover:text-raw-accent disabled:opacity-30">Set primary</button>
+                    <button type="button" onClick={() => removeImage(image.id)} className="text-[9px] uppercase tracking-wider text-red-300/70 hover:text-red-300">Remove</button>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-white/5 px-2 py-1.5 text-white/35">
+                    <button type="button" disabled={idx === 0} onClick={() => moveImage(idx, idx - 1)} aria-label="Move image left">←</button>
+                    <span className="text-[9px] uppercase tracking-wider">Drag to reorder</span>
+                    <button type="button" disabled={idx === formData.images.length - 1} onClick={() => moveImage(idx, idx + 1)} aria-label="Move image right">→</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
