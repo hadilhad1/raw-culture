@@ -1,7 +1,7 @@
 import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/backend/api');
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api');
 
 function getToken() {
   return localStorage.getItem('raw_admin_token') || '';
@@ -543,8 +543,142 @@ function AdminContentPage() {
   );
 }
 
+function AdminCategoriesPage() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch(`${API_URL}/categories`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.json())
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]));
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <header><h1 className="text-3xl font-semibold tracking-[-0.06em]">Categories</h1></header>
+      <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-[#1d2124] p-4">
+              <p className="text-lg font-semibold text-white">{item.name}</p>
+              <p className="text-sm text-white/60">{item.slug}</p>
+            </div>
+          ))}
+          {!items.length && <p className="text-white/60">No categories found.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminCollectionsPage() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch(`${API_URL}/collections`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.json())
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]));
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <header><h1 className="text-3xl font-semibold tracking-[-0.06em]">Collections</h1></header>
+      <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-[#1d2124] p-4">
+              <p className="text-lg font-semibold text-white">{item.name}</p>
+              <p className="text-sm text-white/60">{item.description || item.slug}</p>
+            </div>
+          ))}
+          {!items.length && <p className="text-white/60">No collections found.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminInventoryPage() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch(`${API_URL}/inventory`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.json())
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]));
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <header><h1 className="text-3xl font-semibold tracking-[-0.06em]">Inventory</h1></header>
+      <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-white/60"><tr><th className="py-3 pr-4">Product</th><th className="py-3 pr-4">SKU</th><th className="py-3 pr-4">Stock</th><th className="py-3 pr-4">Status</th></tr></thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id} className="border-t border-white/10"><td className="py-3 pr-4 text-white">{item.name}</td><td className="py-3 pr-4 text-white/70">{item.sku}</td><td className="py-3 pr-4 text-white">{item.stock}</td><td className="py-3 pr-4 text-white/70">{item.status || (item.stock === 0 ? 'OUT_OF_STOCK' : 'IN_STOCK')}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function AdminMediaPage() {
   return <div className="space-y-6"><h1 className="text-3xl font-semibold tracking-[-0.06em]">Media library</h1><div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-6">Upload, preview, search, and manage media files here.</div></div>;
+}
+
+function AdminVideosPage() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch(`${API_URL}/videos`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.json())
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]));
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <header><h1 className="text-3xl font-semibold tracking-[-0.06em]">Videos</h1></header>
+      <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-[#1d2124] p-4">
+              <p className="text-base font-semibold text-white">{item.title}</p>
+              <p className="mt-2 text-sm text-white/60 break-all">{item.url}</p>
+            </div>
+          ))}
+          {!items.length && <p className="text-white/60">No videos found.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminCouponsPage() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch(`${API_URL}/coupons`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((res) => res.json())
+      .then((data) => setItems(Array.isArray(data) ? data : []))
+      .catch(() => setItems([]));
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <header><h1 className="text-3xl font-semibold tracking-[-0.06em]">Coupons</h1></header>
+      <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-[#1d2124] p-4">
+              <p className="text-lg font-semibold text-white">{item.code}</p>
+              <p className="text-sm text-white/60">{item.discountType} • {item.discountValue}%</p>
+            </div>
+          ))}
+          {!items.length && <p className="text-white/60">No coupons found.</p>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AdminSettingsPage() {
@@ -559,10 +693,15 @@ function AdminApp() {
       <Route path="/admin/products" element={<AdminLayout><AdminProductsPage /></AdminLayout>} />
       <Route path="/admin/products/new" element={<AdminLayout><ProductFormPage /></AdminLayout>} />
       <Route path="/admin/products/:id" element={<AdminLayout><ProductFormPage /></AdminLayout>} />
+      <Route path="/admin/categories" element={<AdminLayout><AdminCategoriesPage /></AdminLayout>} />
+      <Route path="/admin/collections" element={<AdminLayout><AdminCollectionsPage /></AdminLayout>} />
+      <Route path="/admin/inventory" element={<AdminLayout><AdminInventoryPage /></AdminLayout>} />
       <Route path="/admin/orders" element={<AdminLayout><AdminOrdersPage /></AdminLayout>} />
       <Route path="/admin/customers" element={<AdminLayout><AdminCustomersPage /></AdminLayout>} />
       <Route path="/admin/content" element={<AdminLayout><AdminContentPage /></AdminLayout>} />
       <Route path="/admin/media" element={<AdminLayout><AdminMediaPage /></AdminLayout>} />
+      <Route path="/admin/videos" element={<AdminLayout><AdminVideosPage /></AdminLayout>} />
+      <Route path="/admin/coupons" element={<AdminLayout><AdminCouponsPage /></AdminLayout>} />
       <Route path="/admin/settings" element={<AdminLayout><AdminSettingsPage /></AdminLayout>} />
       <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>

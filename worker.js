@@ -765,7 +765,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Handle API / backend endpoints
+    // Handle API / backend endpoints before any SPA fallback so /api/* never becomes HTML.
     if (isBackendRoute(url.pathname)) {
       if (request.method === 'OPTIONS') {
         return new Response(null, {
@@ -791,10 +791,19 @@ export default {
       return fetch(new Request(backendUrl, request));
     }
 
+    const isFileRequest = /\.[A-Za-z0-9]+$/.test(url.pathname);
+    const isPageRoute = !isFileRequest && !isBackendRoute(url.pathname) && !isAdminRoute(url.pathname);
+
     // Handle Admin SPA routing
     if (isAdminRoute(url.pathname) && !url.pathname.match(/\.[^/]+$/)) {
       const adminUrl = new URL('/admin/index.html', request.url);
       return env.ASSETS.fetch(new Request(adminUrl, request));
+    }
+
+    if (isPageRoute) {
+      const spaUrl = new URL('/index.html', request.url);
+      const assetResponse = await env.ASSETS.fetch(new Request(spaUrl, request));
+      return assetResponse.status === 404 ? env.ASSETS.fetch(request) : assetResponse;
     }
 
     return env.ASSETS.fetch(request);

@@ -2,8 +2,37 @@ import { Link, NavLink, Route, Routes, useNavigate, useParams } from 'react-rout
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/backend/api');
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api');
 const currency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value || 0));
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Accept: 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+
+  const contentType = response.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json') || contentType.includes('+json');
+  const payload = isJson ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    const message = isJson
+      ? (payload?.message || payload?.error || 'Request failed')
+      : (typeof payload === 'string' && payload.includes('<!DOCTYPE'))
+        ? 'The server returned an unexpected HTML response.'
+        : 'Request failed';
+    throw new Error(message);
+  }
+
+  if (!isJson && payload && typeof payload === 'string' && payload.includes('<!DOCTYPE')) {
+    throw new Error('The server returned an unexpected HTML response.');
+  }
+
+  return payload;
+}
 
 function useCart() {
   const [cart, setCart] = useState(() => {
@@ -55,8 +84,7 @@ function useProducts() {
 
   useEffect(() => {
     let mounted = true;
-    fetch(`${API_URL}/products`)
-      .then((res) => res.json())
+    requestJson(`${API_URL}/products`)
       .then((data) => {
         if (!mounted) return;
         setProducts(Array.isArray(data) ? data : []);
@@ -87,10 +115,9 @@ function useHomepageContent() {
   });
 
   useEffect(() => {
-    fetch(`${API_URL}/content/homepage`)
-      .then((res) => res.json())
+    requestJson(`${API_URL}/content/homepage`)
       .then((data) => {
-        if (data) setContent({ ...content, ...data });
+        if (data) setContent((current) => ({ ...current, ...data }));
       })
       .catch(() => {});
   }, []);
@@ -533,13 +560,11 @@ function CheckoutPage({ cart, clearCart }) {
     };
 
     try {
-      const response = await fetch(`${API_URL}/orders`, {
+      const result = await requestJson(`${API_URL}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Unable to place order');
       clearCart();
       navigate(`/order-success/${result.id || result.orderNumber}`);
     } catch (err) {
@@ -690,17 +715,13 @@ function OrderSuccessPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`${API_URL}/orders/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Order not found');
-        return res.json();
-      })
+    requestJson(`${API_URL}/orders/${id}`)
       .then((data) => {
         setOrder(data);
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message);
+        setError(err.message || 'Order not found');
         setLoading(false);
       });
   }, [id]);
