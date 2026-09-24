@@ -1,0 +1,18 @@
+{
+  "name": "raw-culture",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "frontend",
+    "admin",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace frontend\" \"npm run dev --workspace admin\" \"npm run dev --workspace backend\"",
+    "build": "npm run build --workspace frontend && npm run build --workspace admin && npm run build --workspace backend",
+    "start": "concurrently \"npm run preview --workspace frontend\" \"npm run preview --workspace admin\" \"npm run start --workspace backend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

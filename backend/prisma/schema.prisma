@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String
+  phone         String?
+  passwordHash  String?
+  role          String         @default("CUSTOMER")
+  addresses     Address[]
+  wishlist      WishlistItem[]
+  orders        Order[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Admin {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Collection {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Product {
+  id             String          @id @default(uuid())
+  name           String
+  slug           String          @unique
+  sku            String          @unique
+  description    String
+  price          Float
+  compareAtPrice Float?
+  salePrice      Float?
+  costPrice      Float?
+  stock          Int             @default(0)
+  tags           String?
+  sizes          String?
+  colors         String?
+  status         String          @default("IN_STOCK")
+  featured       Boolean         @default(false)
+  newArrival     Boolean         @default(false)
+  bestSeller     Boolean         @default(false)
+  categoryId     String?
+  category       Category?       @relation(fields: [categoryId], references: [id])
+  collectionId   String?
+  collection     Collection?     @relation(fields: [collectionId], references: [id])
+  images         ProductImage[]
+  videos         ProductVideo[]
+  wishlistItems  WishlistItem[]
+  orderItems     OrderItem[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  url       String
+  alt       String?
+  ordering  Int     @default(0)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductVideo {
+  id        String  @id @default(uuid())
+  url       String
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Address {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  country   String
+  postalCode String
+  isDefault Boolean @default(false)
+}
+
+model WishlistItem {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id               String      @id @default(uuid())
+  userId           String?
+  user             User?       @relation(fields: [userId], references: [id])
+  email            String
+  phone            String?
+  orderNumber      String      @unique
+  status           String      @default("PENDING")
+  paymentStatus    String      @default("PENDING")
+  subtotal         Float
+  shippingFee      Float       @default(0)
+  discount         Float       @default(0)
+  total            Float
+  trackingNumber   String?
+  shippingProvider String?
+  shippingAddress  String
+  notes            String?
+  items            OrderItem[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  name      String
+  size      String
+  color     String
+  quantity  Int
+  price     Float
+}
+
+model HomepageContent {
+  id              String @id @default(uuid())
+  heroTitle       String
+  heroSubtitle    String
+  heroButton1     String
+  heroButton2     String
+  heroImage       String
+  heroVideo       String?
+  brandStory      String
+  newsletterTitle String
+  newsletterCopy  String
+  updatedAt       DateTime @updatedAt
+}
+
+model MediaAsset {
+  id        String   @id @default(uuid())
+  type      String
+  url       String
+  name      String
+  createdAt DateTime @default(now())
+}
+
