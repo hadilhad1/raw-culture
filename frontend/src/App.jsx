@@ -2,7 +2,7 @@ import { Link, NavLink, Route, Routes, useNavigate, useParams } from 'react-rout
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api');
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/backend/api');
 const currency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 
 function useProducts() {

@@ -30,3 +30,11 @@ A premium streetwear e-commerce monorepo for the RAW-CULTURE brand.
 ## Notes
 
 This project is structured to demonstrate a production-ready monorepo with connected frontend, admin, and backend logic. The dashboard and storefront are intentionally designed around a shared backend API and seed data.
+
+## Cloudflare Worker paths
+
+- `/`: storefront assets from `frontend/dist`
+- `/admin`: admin assets from `admin/dist`
+- `/api` and `/backend`: proxied to the backend URL configured as the Cloudflare `BACKEND_URL` variable
+
+The Express backend must be deployed separately. Set its `CORS_ORIGIN` to the public Worker origin, then set `BACKEND_URL` in the Cloudflare Worker environment.
