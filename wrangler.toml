@@ -7,3 +7,8 @@ directory = "./frontend/dist"
 not_found_handling = "single-page-application"
 
 # Set BACKEND_URL in Cloudflare to the public Express API origin, without a trailing slash.
+
+[[d1_databases]]
+binding = "raw_culture_db"
+database_name = "raw-culture-db"
+database_id = "d36983ba-9b33-4eb5-bca6-70cc17241bce"

@@ -1,0 +1,57 @@
+CREATE TABLE IF NOT EXISTS admins (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  sku TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  price REAL NOT NULL,
+  sale_price REAL NOT NULL DEFAULT 0,
+  cost_price REAL NOT NULL DEFAULT 0,
+  stock INTEGER NOT NULL DEFAULT 0,
+  category TEXT NOT NULL DEFAULT 'Shop',
+  tags TEXT NOT NULL DEFAULT '[]',
+  sizes TEXT NOT NULL DEFAULT '[]',
+  colors TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'IN_STOCK',
+  featured INTEGER NOT NULL DEFAULT 0,
+  new_arrival INTEGER NOT NULL DEFAULT 0,
+  best_seller INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS product_images (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  alt TEXT NOT NULL DEFAULT '',
+  ordering INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS product_videos (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS homepage_content (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  hero_title TEXT NOT NULL,
+  hero_subtitle TEXT NOT NULL,
+  hero_button1 TEXT NOT NULL,
+  hero_button2 TEXT NOT NULL,
+  hero_image TEXT NOT NULL,
+  hero_video TEXT NOT NULL,
+  brand_story TEXT NOT NULL,
+  newsletter_title TEXT NOT NULL,
+  newsletter_copy TEXT NOT NULL
+);
