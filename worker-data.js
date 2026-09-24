@@ -1,8 +1,29 @@
-const imageUrls = [
-  'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80',
-];
+const imageSets = {
+  tshirt: ['/products/tshirt/front.jpg', '/products/tshirt/detail.jpg'],
+  shirt: ['/products/shirt/front.jpg', '/products/shirt/detail.jpg'],
+  hoodie: ['/products/hoodie/front.jpg', '/products/hoodie/detail.jpg'],
+  cargo: ['/products/cargo/front.jpg', '/products/cargo/detail.jpg'],
+  denim: ['/products/denim/front.jpg', '/products/denim/detail.jpg'],
+  jacket: ['/products/jacket/front.jpg', '/products/jacket/detail.jpg'],
+  cap: ['/products/cap/front.jpg', '/products/cap/detail.jpg'],
+  bag: ['/products/bag/front.jpg', '/products/bag/detail.jpg'],
+  belt: ['/products/belt/front.jpg', '/products/belt/detail.jpg'],
+  sneakers: ['/products/sneakers/front.jpg', '/products/sneakers/detail.jpg'],
+};
+
+function imageSetForProduct(name, category) {
+  const value = `${name} ${category}`.toLowerCase();
+  if (value.includes('hoodie') || value.includes('sweatshirt')) return imageSets.hoodie;
+  if (value.includes('cargo') || value.includes('chino') || value.includes('work pants')) return imageSets.cargo;
+  if (value.includes('denim') || value.includes('jean')) return imageSets.denim;
+  if (value.includes('jacket') || value.includes('bomber')) return imageSets.jacket;
+  if (value.includes('cap')) return imageSets.cap;
+  if (value.includes('belt')) return imageSets.belt;
+  if (value.includes('tote') || value.includes('bag')) return imageSets.bag;
+  if (category.toLowerCase().includes('shirt')) return imageSets.shirt;
+  if (value.includes('sneaker') || value.includes('shoe')) return imageSets.sneakers;
+  return imageSets.tshirt;
+}
 
 const productSeeds = [
   ['RAW Oversized Tee', '69', 'T-Shirts', true, true, false],
@@ -44,10 +65,7 @@ export const demoProducts = productSeeds.map(([name, price, category, featured, 
   tags: ['raw-culture', 'streetwear'],
   sizes: ['S', 'M', 'L', 'XL'],
   colors: ['Black', 'Stone'],
-  images: [
-    { id: `${index}-front`, url: imageUrls[index % imageUrls.length], alt: `${name} front`, ordering: 0 },
-    { id: `${index}-detail`, url: imageUrls[(index + 1) % imageUrls.length], alt: `${name} detail`, ordering: 1 },
-  ],
+  images: imageSetForProduct(name, category).map((url, imageIndex) => ({ id: `${index}-${imageIndex}`, url, alt: `${name} ${imageIndex ? 'detail' : 'front'}`, ordering: imageIndex })),
   videos: [],
 }));
 

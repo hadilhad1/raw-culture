@@ -36,6 +36,19 @@ const products = [
   { name: 'Afterhours Shirt', slug: 'afterhours-shirt', sku: 'RC-SH-003', description: 'An elevated dress shirt with a casual stretch fit.', price: 126, compareAtPrice: 158, salePrice: 126, costPrice: 58, stock: 20, tags: ['dress', 'casual'], sizes: ['S', 'M', 'L', 'XL'], colors: ['White', 'Blue'], status: 'IN_STOCK', featured: false, newArrival: true, bestSeller: false, categorySlug: 'shirts' }
 ];
 
+function productImageSet(product) {
+  const value = `${product.name} ${product.categorySlug}`.toLowerCase();
+  if (value.includes('hoodie') || value.includes('sweatshirt')) return ['/products/hoodie/front.jpg', '/products/hoodie/detail.jpg'];
+  if (value.includes('cargo') || value.includes('chino') || value.includes('work pants')) return ['/products/cargo/front.jpg', '/products/cargo/detail.jpg'];
+  if (value.includes('denim') || value.includes('jean')) return ['/products/denim/front.jpg', '/products/denim/detail.jpg'];
+  if (value.includes('jacket') || value.includes('bomber')) return ['/products/jacket/front.jpg', '/products/jacket/detail.jpg'];
+  if (value.includes('cap')) return ['/products/cap/front.jpg', '/products/cap/detail.jpg'];
+  if (value.includes('belt')) return ['/products/belt/front.jpg', '/products/belt/detail.jpg'];
+  if (value.includes('tote') || value.includes('bag')) return ['/products/bag/front.jpg', '/products/bag/detail.jpg'];
+  if (product.categorySlug === 'shirts') return ['/products/shirt/front.jpg', '/products/shirt/detail.jpg'];
+  return ['/products/tshirt/front.jpg', '/products/tshirt/detail.jpg'];
+}
+
 async function main() {
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
@@ -72,6 +85,7 @@ async function main() {
 
   for (const product of products) {
     const category = createdCategories.find((c) => c.slug === product.categorySlug);
+    const images = productImageSet(product);
     const productRecord = await prisma.product.create({
       data: {
         name: product.name,
@@ -93,7 +107,7 @@ async function main() {
         categoryId: category.id,
         images: {
           create: {
-            url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80',
+            url: images[0],
             alt: product.name,
             ordering: 0,
           }
@@ -108,8 +122,8 @@ async function main() {
 
     await prisma.productImage.createMany({
       data: [
-        { productId: productRecord.id, url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80', alt: `${product.name} Front`, ordering: 0 },
-        { productId: productRecord.id, url: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=900&q=80', alt: `${product.name} Back`, ordering: 1 },
+        { productId: productRecord.id, url: images[0], alt: `${product.name} Front`, ordering: 0 },
+        { productId: productRecord.id, url: images[1], alt: `${product.name} Detail`, ordering: 1 },
       ]
     });
   }

@@ -69,6 +69,31 @@ function productFromRow(row, images, videos) {
   };
 }
 
+function imageSetForProduct(name, category) {
+  const value = `${name} ${category}`.toLowerCase();
+  if (value.includes('hoodie') || value.includes('sweatshirt')) return ['/products/hoodie/front.jpg', '/products/hoodie/detail.jpg'];
+  if (value.includes('cargo') || value.includes('chino') || value.includes('work pants')) return ['/products/cargo/front.jpg', '/products/cargo/detail.jpg'];
+  if (value.includes('denim') || value.includes('jean')) return ['/products/denim/front.jpg', '/products/denim/detail.jpg'];
+  if (value.includes('jacket') || value.includes('bomber')) return ['/products/jacket/front.jpg', '/products/jacket/detail.jpg'];
+  if (value.includes('cap')) return ['/products/cap/front.jpg', '/products/cap/detail.jpg'];
+  if (value.includes('belt')) return ['/products/belt/front.jpg', '/products/belt/detail.jpg'];
+  if (value.includes('tote') || value.includes('bag')) return ['/products/bag/front.jpg', '/products/bag/detail.jpg'];
+  if (category.toLowerCase().includes('shirt')) return ['/products/shirt/front.jpg', '/products/shirt/detail.jpg'];
+  if (value.includes('sneaker') || value.includes('shoe')) return ['/products/sneakers/front.jpg', '/products/sneakers/detail.jpg'];
+  return ['/products/tshirt/front.jpg', '/products/tshirt/detail.jpg'];
+}
+
+async function syncCatalogImages(db) {
+  const rows = await db.prepare('SELECT id, name, category FROM products').all();
+  for (const row of rows.results) {
+    const images = imageSetForProduct(row.name, row.category);
+    const current = await db.prepare('SELECT url FROM product_images WHERE product_id = ? ORDER BY ordering').bind(row.id).all();
+    if (current.results.length === images.length && current.results.every((image, index) => image.url === images[index])) continue;
+    await db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(row.id).run();
+    await db.batch(images.map((url, ordering) => db.prepare('INSERT INTO product_images (id, product_id, url, alt, ordering) VALUES (?, ?, ?, ?, ?)').bind(`${row.id}-catalog-${ordering}`, row.id, url, `${row.name} ${ordering ? 'detail' : 'front'}`, ordering)));
+  }
+}
+
 async function ensureDatabase(db) {
   await db.batch([
     db.prepare('CREATE TABLE IF NOT EXISTS admins (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password_hash TEXT NOT NULL)'),
@@ -79,7 +104,10 @@ async function ensureDatabase(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, order_number TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL, phone TEXT NOT NULL, shipping_address TEXT NOT NULL, items TEXT NOT NULL, subtotal REAL NOT NULL, total REAL NOT NULL, status TEXT NOT NULL DEFAULT \'PENDING\', payment_status TEXT NOT NULL DEFAULT \'PENDING\', payment_method TEXT NOT NULL DEFAULT \'cod\', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)'),
   ]);
   const count = await db.prepare('SELECT COUNT(*) AS count FROM products').first();
-  if (Number(count.count) > 0) return;
+  if (Number(count.count) > 0) {
+    await syncCatalogImages(db);
+    return;
+  }
   const passwordHash = await hashPassword('Admin@123');
   const statements = [db.prepare('INSERT OR IGNORE INTO admins (id, email, name, password_hash) VALUES (?, ?, ?, ?)').bind('demo-admin', 'admin@rawculture.com', 'RAW-CULTURE Admin', passwordHash)];
   for (const product of demoProducts) {
