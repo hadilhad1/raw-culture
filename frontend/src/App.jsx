@@ -17,7 +17,21 @@ function useCart() {
     setCart((items) => {
       const existing = items.find((item) => item.key === key);
       if (existing) return items.map((item) => item.key === key ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...items, { key, productId: product.id, name: product.name, price: Number(product.salePrice || product.price), image: product.images?.[0]?.url, size: options.size || product.sizes?.[0] || 'One Size', color: options.color || product.colors?.[0] || 'Standard', quantity: 1 }];
+      return [
+        ...items,
+        {
+          key,
+          productId: product.id,
+          name: product.name,
+          sku: product.sku || 'RC-ITEM',
+          category: product.category?.name || 'Streetwear',
+          price: Number(product.salePrice || product.price),
+          image: product.images?.[0]?.url || '',
+          size: options.size || product.sizes?.[0] || 'One Size',
+          color: options.color || product.colors?.[0] || 'Standard',
+          quantity: 1,
+        },
+      ];
     });
   };
   const updateQuantity = (key, quantity) => setCart((items) => items.map((item) => item.key === key ? { ...item, quantity: Math.max(0, quantity) } : item).filter((item) => item.quantity > 0));
@@ -438,29 +452,351 @@ function ProductPage({ cartCount, onAdd, onWishlist, wishlist = [] }) {
 
 function CheckoutPage({ cart, clearCart }) {
   const navigate = useNavigate();
-  const [submitted, setSubmitted] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [couponInput, setCouponInput] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const submitOrder = async (event) => {
-    event.preventDefault(); setLoading(true); setError('');
-    const form = new FormData(event.currentTarget);
-    const response = await fetch(`${API_URL}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.get('email'), name: form.get('name'), phone: form.get('phone'), shippingAddress: { line1: form.get('address'), city: form.get('city'), postalCode: form.get('postalCode'), country: 'India' }, items: cart, total: subtotal, paymentMethod: form.get('paymentMethod') }) });
-    const result = await response.json(); setLoading(false);
-    if (!response.ok) { setError(result.message || 'Unable to place order.'); return; }
-    clearCart(); navigate(`/order-success/${result.id}`);
+  const discount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const shippingFee = subtotal > 200 ? 0 : 40;
+  const grandTotal = Math.max(0, subtotal - discount + shippingFee);
+
+  const applyCoupon = async (e) => {
+    e.preventDefault();
+    if (!couponInput.trim()) return;
+    setCouponLoading(true);
+    setCouponError('');
+    try {
+      const res = await fetch(`${API_URL}/coupons/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponInput.trim(), subtotal }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        throw new Error(data.message || 'Invalid coupon');
+      }
+      setAppliedCoupon(data);
+      setCouponInput('');
+    } catch (err) {
+      setCouponError(err.message || 'Could not validate coupon');
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
   };
-  if (!cart.length && !submitted) return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[900px] px-5 py-12"><h1 className="text-4xl font-semibold">Checkout</h1><p className="mt-6">Your cart is empty.</p></main></div>;
-  if (submitted) return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[700px] px-5 py-20 text-center"><p className="text-xs uppercase tracking-[0.25em]">Order confirmed</p><h1 className="mt-4 text-5xl font-semibold">Thank you for your order.</h1><p className="mt-5">Order {submitted.orderNumber} is confirmed. Payment is pending and will be collected by cash on delivery.</p><Link to="/shop" className="mt-8 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Continue shopping</Link></main></div>;
-  return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header cartCount={cart.length} /><main className="mx-auto grid max-w-[1100px] gap-8 px-5 py-12 lg:grid-cols-[1fr_0.8fr]"><form onSubmit={submitOrder} className="space-y-4 rounded-[28px] bg-white p-7 shadow-md"><h1 className="text-4xl font-semibold">Checkout</h1>{['name','email','phone','address','city','postalCode'].map((field) => <input key={field} name={field} required className="w-full rounded-xl border border-black/15 px-4 py-3" placeholder={field === 'postalCode' ? 'Postal code' : field[0].toUpperCase() + field.slice(1)} />)}<select name="paymentMethod" className="w-full rounded-xl border border-black/15 px-4 py-3"><option value="cod">Cash on delivery</option><option value="pending">Payment pending</option></select>{error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}<button disabled={loading} className="w-full rounded-full bg-raw-accent px-6 py-4 text-xs uppercase tracking-[0.2em] text-white">{loading ? 'Placing order...' : 'Place order'}</button></form><aside className="rounded-[28px] bg-[#171b1d] p-7 text-white"><h2 className="text-2xl font-semibold">Order summary</h2>{cart.map((item) => <div key={item.key} className="mt-4 flex justify-between gap-4 text-sm"><span>{item.name} × {item.quantity}</span><span>{currency(item.price * item.quantity)}</span></div>)}<div className="mt-8 border-t border-white/15 pt-5 text-xl">Total <span className="float-right">{currency(subtotal)}</span></div></aside></main></div>;
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
+
+  const submitOrder = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    const form = new FormData(event.currentTarget);
+
+    const shippingAddress = {
+      line1: form.get('address1') || '',
+      line2: form.get('address2') || '',
+      city: form.get('city') || '',
+      state: form.get('state') || '',
+      postalCode: form.get('postalCode') || '',
+      country: form.get('country') || 'India',
+    };
+
+    const payload = {
+      name: form.get('name'),
+      email: form.get('email'),
+      phone: form.get('phone'),
+      shippingAddress,
+      items: cart.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        sku: item.sku || 'RC-ITEM',
+        price: item.price,
+        image: item.image || '',
+        size: item.size || 'Standard',
+        color: item.color || 'Standard',
+        quantity: item.quantity,
+      })),
+      subtotal,
+      discount,
+      shippingFee,
+      total: grandTotal,
+      couponCode: appliedCoupon?.code || undefined,
+      paymentMethod: form.get('paymentMethod') || 'cod',
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Unable to place order');
+      clearCart();
+      navigate(`/order-success/${result.id || result.orderNumber}`);
+    } catch (err) {
+      setError(err.message || 'Unable to place order. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!cart.length) {
+    return (
+      <div className="min-h-screen bg-[#f4f1ea] text-black">
+        <Header />
+        <main className="mx-auto max-w-[900px] px-5 py-20 text-center">
+          <h1 className="text-4xl font-semibold">Checkout</h1>
+          <p className="mt-4 text-black/60">Your cart is empty. Add products to begin checkout.</p>
+          <Link to="/shop" className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Explore Catalog</Link>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f4f1ea] text-black">
+      <Header cartCount={cart.length} />
+      <main className="mx-auto grid max-w-[1200px] gap-8 px-5 py-12 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-6">
+          <form onSubmit={submitOrder} className="space-y-5 rounded-[28px] bg-white p-7 shadow-md">
+            <h1 className="text-3xl font-semibold tracking-[-0.04em]">Delivery & Customer Details</h1>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Full Name *</label>
+                <input name="name" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="John Doe" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Email Address *</label>
+                <input type="email" name="email" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="john@example.com" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Phone Number *</label>
+                <input type="tel" name="phone" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="+91 98765 43210" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Street Address *</label>
+                <input name="address1" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="Flat / House No., Building, Street" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Apartment, Suite, Landmark (Optional)</label>
+                <input name="address2" className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="Near City Mall, Landmark" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">City *</label>
+                <input name="city" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="Mumbai" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">State *</label>
+                <input name="state" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="Maharashtra" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Postal / PIN Code *</label>
+                <input name="postalCode" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" placeholder="400001" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Country *</label>
+                <input name="country" defaultValue="India" required className="w-full rounded-xl border border-black/15 px-4 py-3 outline-none focus:border-black" />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] uppercase tracking-[0.18em] text-black/60">Payment Method</label>
+                <select name="paymentMethod" className="w-full rounded-xl border border-black/15 bg-white px-4 py-3 outline-none focus:border-black">
+                  <option value="cod">Cash on Delivery (Pay upon delivery)</option>
+                  <option value="online">Online Payment (UPI, Card, Net Banking)</option>
+                </select>
+              </div>
+            </div>
+
+            {error && <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+
+            <button disabled={loading} type="submit" className="w-full rounded-full bg-raw-accent px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition hover:bg-[#2346d6] disabled:opacity-50">
+              {loading ? 'Processing Order...' : `Place Order • ${currency(grandTotal)}`}
+            </button>
+          </form>
+        </div>
+
+        <aside className="space-y-6">
+          <div className="rounded-[28px] bg-white p-7 shadow-md">
+            <h2 className="text-xl font-semibold">Have a Coupon?</h2>
+            {appliedCoupon ? (
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-50 p-3 text-emerald-800">
+                <div>
+                  <span className="font-bold">{appliedCoupon.code}</span> applied: {currency(appliedCoupon.discountAmount)} off
+                </div>
+                <button type="button" onClick={removeCoupon} className="text-xs text-red-600 underline hover:text-red-800">Remove</button>
+              </div>
+            ) : (
+              <div className="mt-4 flex gap-2">
+                <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="e.g. RAW10" className="flex-1 rounded-xl border border-black/15 px-4 py-2 uppercase outline-none focus:border-black" />
+                <button type="button" disabled={couponLoading} onClick={applyCoupon} className="rounded-xl bg-black px-4 py-2 text-xs uppercase tracking-[0.15em] text-white disabled:opacity-50">
+                  {couponLoading ? 'Checking...' : 'Apply'}
+                </button>
+              </div>
+            )}
+            {couponError && <p className="mt-2 text-xs text-red-600">{couponError}</p>}
+          </div>
+
+          <div className="rounded-[28px] bg-[#171b1d] p-7 text-white shadow-xl">
+            <h2 className="text-xl font-semibold">Order Summary</h2>
+            <div className="mt-6 divide-y divide-white/10">
+              {cart.map((item) => (
+                <div key={item.key} className="flex gap-4 py-4">
+                  <img src={item.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=150&q=80'} alt={item.name} className="h-16 w-14 rounded-lg object-cover" />
+                  <div className="flex-1">
+                    <p className="font-medium text-white">{item.name}</p>
+                    <p className="text-xs text-white/50">Size: {item.size} | Color: {item.color}</p>
+                    <p className="mt-1 text-xs text-white/70">Qty: {item.quantity} × {currency(item.price)}</p>
+                  </div>
+                  <div className="font-semibold">{currency(item.price * item.quantity)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 space-y-2 border-t border-white/15 pt-5 text-sm text-white/80">
+              <div className="flex justify-between"><span>Subtotal</span><span>{currency(subtotal)}</span></div>
+              {discount > 0 && <div className="flex justify-between text-emerald-400"><span>Coupon Discount ({appliedCoupon?.code})</span><span>−{currency(discount)}</span></div>}
+              <div className="flex justify-between"><span>Shipping</span><span>{shippingFee === 0 ? 'FREE' : currency(shippingFee)}</span></div>
+              <div className="flex justify-between border-t border-white/15 pt-4 text-xl font-bold text-white"><span>Total</span><span>{currency(grandTotal)}</span></div>
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+  );
 }
 
 function OrderSuccessPage() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
-  useEffect(() => { fetch(`${API_URL}/orders/${id}`).then((res) => res.json()).then(setOrder).catch(() => {}); }, [id]);
-  if (!order) return <div className="min-h-screen bg-[#f4f1ea] p-10 text-black">Loading order...</div>;
-  return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[760px] px-5 py-16"><div className="rounded-[28px] bg-white p-8 shadow-md"><p className="text-xs uppercase tracking-[0.25em] text-raw-accent">✓ Order confirmed</p><h1 className="mt-4 text-4xl font-semibold">Thank you for your order.</h1><p className="mt-4 text-black/65">Order #{order.orderNumber} · {order.paymentMethod === 'cod' ? 'Cash on delivery' : 'Payment pending'}</p><div className="mt-8 space-y-3 border-t border-black/10 pt-5">{order.items.map((item) => <div key={`${item.productId}-${item.size}-${item.color}`} className="flex justify-between"><span>{item.name} × {item.quantity}</span><span>{currency(item.price * item.quantity)}</span></div>)}<div className="flex justify-between border-t border-black/10 pt-4 text-xl font-semibold"><span>Total</span><span>{currency(order.total)}</span></div></div><Link to="/shop" className="mt-8 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Continue shopping</Link></div></main></div>;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch(`${API_URL}/orders/${id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Order not found');
+        return res.json();
+      })
+      .then((data) => {
+        setOrder(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f4f1ea] p-12 text-center text-black">
+        <Header />
+        <p className="mt-20 text-lg">Loading order confirmation...</p>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="min-h-screen bg-[#f4f1ea] p-12 text-center text-black">
+        <Header />
+        <div className="mx-auto mt-16 max-w-md rounded-[28px] bg-white p-8 shadow-md">
+          <p className="text-xl font-semibold text-red-600">Order Notice</p>
+          <p className="mt-3 text-black/60">{error || 'Order details currently unavailable.'}</p>
+          <Link to="/shop" className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Back to Shop</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const addr = order.shippingAddress || {};
+
+  return (
+    <div className="min-h-screen bg-[#f4f1ea] text-black">
+      <Header />
+      <main className="mx-auto max-w-[800px] px-5 py-16">
+        <div className="rounded-[32px] bg-white p-8 shadow-lg md:p-12">
+          <div className="text-center">
+            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-600">✓</span>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.28em] text-raw-accent">Order Confirmed</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-[-0.05em]">Thank You for Your Order</h1>
+            <p className="mt-2 text-sm text-black/60">
+              Order #{order.orderNumber} • Placed on {new Date(order.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 border-t border-black/10 pt-8 sm:grid-cols-2">
+            <div className="rounded-2xl bg-[#faf8f5] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/50">Delivery Address</h3>
+              <p className="mt-2 font-medium">{order.name}</p>
+              <p className="text-sm text-black/70">{addr.line1}</p>
+              {addr.line2 && <p className="text-sm text-black/70">{addr.line2}</p>}
+              <p className="text-sm text-black/70">{addr.city}{addr.state ? `, ${addr.state}` : ''} - {addr.postalCode}</p>
+              <p className="text-sm text-black/70">{addr.country || 'India'}</p>
+              <p className="mt-2 text-sm text-black/70">Phone: {order.phone || addr.phone || 'N/A'}</p>
+            </div>
+
+            <div className="rounded-2xl bg-[#faf8f5] p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/50">Payment & Status</h3>
+              <div className="mt-3 space-y-2 text-sm">
+                <div>Method: <strong className="uppercase">{order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'}</strong></div>
+                <div>Payment Status: <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{order.paymentStatus}</span></div>
+                <div>Order Status: <span className="inline-block rounded-md bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-800">{order.status}</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-black/10 pt-8">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/50">Items Ordered</h3>
+            <div className="mt-4 divide-y divide-black/10">
+              {(order.items || []).map((item, idx) => (
+                <div key={item.id || idx} className="flex items-center gap-4 py-4">
+                  {item.image && <img src={item.image} alt={item.name} className="h-16 w-14 rounded-lg object-cover" />}
+                  <div className="flex-1">
+                    <p className="font-semibold text-black">{item.name}</p>
+                    <p className="text-xs text-black/50">SKU: {item.sku || 'RC-ITEM'} | Size: {item.size} | Color: {item.color}</p>
+                    <p className="text-xs text-black/70">Qty: {item.quantity} × {currency(item.price)}</p>
+                  </div>
+                  <div className="font-bold text-black">{currency(item.price * item.quantity)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 space-y-2 border-t border-black/10 pt-4 text-sm">
+              <div className="flex justify-between text-black/70"><span>Subtotal</span><span>{currency(order.subtotal || order.total)}</span></div>
+              {order.discount > 0 && <div className="flex justify-between text-emerald-600"><span>Discount</span><span>−{currency(order.discount)}</span></div>}
+              <div className="flex justify-between text-black/70"><span>Shipping</span><span>{order.shippingFee ? currency(order.shippingFee) : 'FREE'}</span></div>
+              <div className="flex justify-between border-t border-black/10 pt-3 text-xl font-bold"><span>Total</span><span>{currency(order.total)}</span></div>
+            </div>
+          </div>
+
+          <div className="mt-10 text-center">
+            <Link to="/shop" className="inline-flex rounded-full bg-black px-8 py-3 text-xs uppercase tracking-[0.2em] text-white shadow-md hover:bg-neutral-800">
+              Continue Shopping
+            </Link>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
 
 function CartPage({ cart, updateQuantity, removeFromCart }) {
