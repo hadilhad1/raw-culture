@@ -1,0 +1,12 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.env
+.env.*
+!.env.example
+.wrangler/
+.dev.vars
+.DS_Store
