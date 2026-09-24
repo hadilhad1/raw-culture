@@ -443,6 +443,7 @@ function ProductFormPage() {
 
 function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
+  const [error, setError] = useState('');
   useEffect(() => {
     fetch(`${API_URL}/orders`)
       .then((res) => res.json())
@@ -450,12 +451,19 @@ function AdminOrdersPage() {
       .catch(() => {});
   }, []);
 
+  const updateStatus = async (orderId, status) => {
+    const response = await fetch(`${API_URL}/orders/${orderId}/status`, { method: 'PATCH', headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+    if (!response.ok) { setError('Unable to update order status.'); return; }
+    setOrders((items) => items.map((order) => order.id === orderId ? { ...order, status } : order));
+  };
+
   return (
     <div className="space-y-6">
       <header>
         <p className="text-[10px] uppercase tracking-[0.24em] text-white/60">Orders</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.06em]">All orders</h1>
       </header>
+      {error && <p className="rounded-xl bg-red-500/10 p-3 text-red-300">{error}</p>}
       <div className="rounded-[24px] border border-white/10 bg-[#171a1d] p-4">
         <table className="min-w-full text-left text-sm">
           <thead className="text-white/60">
@@ -474,7 +482,7 @@ function AdminOrdersPage() {
                 <td className="py-3 pr-4">{order.email}</td>
                 <td className="py-3 pr-4">{new Date(order.createdAt).toLocaleDateString()}</td>
                 <td className="py-3 pr-4">${Number(order.total || 0).toFixed(2)}</td>
-                <td className="py-3 pr-4">{order.status}</td>
+                <td className="py-3 pr-4"><select value={order.status} onChange={(event) => updateStatus(order.id, event.target.value)} className="rounded-lg border border-white/10 bg-[#1d2124] px-2 py-1"><option>PENDING</option><option>CONFIRMED</option><option>PROCESSING</option><option>SHIPPED</option><option>DELIVERED</option><option>CANCELLED</option></select></td>
               </tr>
             ))}
           </tbody>

@@ -25,6 +25,15 @@ function useCart() {
   return { cart, addToCart, updateQuantity, removeFromCart, clearCart: () => setCart([]) };
 }
 
+function useWishlist() {
+  const [wishlist, setWishlist] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('raw-culture-wishlist') || '[]'); } catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('raw-culture-wishlist', JSON.stringify(wishlist)); }, [wishlist]);
+  const toggleWishlist = (product) => setWishlist((items) => items.some((item) => item.id === product.id) ? items.filter((item) => item.id !== product.id) : [...items, product]);
+  return { wishlist, toggleWishlist };
+}
+
 function useProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -75,25 +84,26 @@ function useHomepageContent() {
   return content;
 }
 
-function ProductCard({ product, onAdd }) {
+function ProductCard({ product, onAdd, onWishlist, wished }) {
   const [image, setImage] = useState(product.images?.[0]?.url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80');
 
   return (
     <motion.article initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45 }} className="product-card group relative overflow-hidden rounded-[26px] bg-white shadow-raw" whileHover={{ y: -6 }}>
       <div className="relative aspect-[4/5] overflow-hidden bg-[#ece7df]">
-        <img src={image} alt={product.name} className="h-full w-full object-cover" onMouseEnter={() => setImage(product.images?.[1]?.url || product.images?.[0]?.url || image)} onMouseLeave={() => setImage(product.images?.[0]?.url || image)} />
+        <Link to={`/products/${product.slug || product.id}`} aria-label={`View ${product.name}`} className="absolute inset-0 z-0" />
+        <img src={image} alt={product.name} className="pointer-events-none h-full w-full object-cover" onMouseEnter={() => setImage(product.images?.[1]?.url || product.images?.[0]?.url || image)} onMouseLeave={() => setImage(product.images?.[0]?.url || image)} />
         <div className="absolute left-4 top-4 flex gap-2">
           {product.newArrival && <span className="rounded-full bg-raw-lime px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black">New</span>}
           {product.compareAtPrice && <span className="rounded-full bg-black px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white">Sale</span>}
         </div>
-        <button className="absolute right-4 top-4 rounded-full border border-black/10 bg-white/80 p-2 text-sm transition hover:scale-105">♡</button>
-        <button onClick={() => onAdd(product)} className="absolute bottom-4 left-4 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100">Add to cart</button>
+        <button onClick={(event) => { event.preventDefault(); event.stopPropagation(); onWishlist(product); }} className={`absolute right-4 top-4 z-10 rounded-full border border-black/10 bg-white/80 p-2 text-sm transition hover:scale-110 ${wished ? 'text-red-600' : ''}`}>{wished ? '♥' : '♡'}</button>
+        <button onClick={(event) => { event.preventDefault(); event.stopPropagation(); onAdd(product); }} className="absolute bottom-4 left-4 z-10 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100">Add to cart</button>
       </div>
       <div className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-black/60">{product.category?.name || 'Shop'}</p>
-            <h3 className="mt-1 text-lg font-medium text-black">{product.name}</h3>
+            <Link to={`/products/${product.slug || product.id}`} className="mt-1 block text-lg font-medium text-black hover:underline">{product.name}</Link>
           </div>
           <div className="text-right">
             <p className="text-base font-semibold text-black">{currency(product.price)}</p>
@@ -137,6 +147,7 @@ function Header({ cartCount = 0 }) {
         </div>
         <div className="flex items-center gap-4 text-xs uppercase tracking-[0.18em] text-white/70">
           <button className="transition hover:text-white">Search</button>
+          <Link to="/wishlist" className="transition hover:text-white">Wishlist</Link>
           <Link to="/cart" className="transition hover:text-white">Cart ({cartCount})</Link>
         </div>
       </div>
@@ -144,7 +155,7 @@ function Header({ cartCount = 0 }) {
   );
 }
 
-function HomePage({ cartCount, onAdd }) {
+function HomePage({ cartCount, onAdd, onWishlist, wishlist }) {
   const { products, loading, error } = useProducts();
   const content = useHomepageContent();
   const featuredProducts = useMemo(() => (products || []).filter((product) => product.featured).slice(0, 4), [products]);
@@ -208,7 +219,7 @@ function HomePage({ cartCount, onAdd }) {
           <div className="mx-auto max-w-[1440px]">
             <SectionTitle eyebrow="New Arrivals" title="Fresh lines for the season" action="View all" />
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4 text-black">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : featuredProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} />)}
+              {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4 text-black">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : featuredProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} onWishlist={onWishlist} wished={wishlist.some((item) => item.id === product.id)} />)}
             </div>
           </div>
         </section>
@@ -255,7 +266,7 @@ function HomePage({ cartCount, onAdd }) {
           <div className="mx-auto max-w-[1440px]">
             <SectionTitle eyebrow="Trending now" title="Most wanted essentials" action="Shop all" />
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {(trendingProducts || []).map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} />)}
+              {(trendingProducts || []).map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} onWishlist={onWishlist} wished={wishlist.some((item) => item.id === product.id)} />)}
             </div>
           </div>
         </section>
@@ -333,7 +344,7 @@ function HomePage({ cartCount, onAdd }) {
   );
 }
 
-function CatalogPage({ cartCount, onAdd }) {
+function CatalogPage({ cartCount, onAdd, onWishlist, wishlist }) {
   const { products, loading, error } = useProducts();
 
   return (
@@ -349,17 +360,22 @@ function CatalogPage({ cartCount, onAdd }) {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : (products || []).map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} />)}
+          {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : (products || []).map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} onWishlist={onWishlist} wished={wishlist.some((item) => item.id === product.id)} />)}
         </div>
       </main>
     </div>
   );
 }
 
-function ProductPage({ cartCount, onAdd }) {
+function ProductPage({ cartCount, onAdd, onWishlist, wishlist = [] }) {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(0);
+  const [size, setSize] = useState('');
+  const [color, setColor] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     fetch(`${API_URL}/products/${id}`)
@@ -374,14 +390,25 @@ function ProductPage({ cartCount, onAdd }) {
   if (loading) return <div className="min-h-screen bg-[#f4f1ea] p-10 text-black">Loading product...</div>;
   if (!product) return <div className="min-h-screen bg-[#f4f1ea] p-10 text-black">Product not found.</div>;
 
+  const sizes = product.sizes || [];
+  const colors = product.colors || [];
+  const wished = wishlist.some((item) => item.id === product.id);
+  const addSelected = () => {
+    if (sizes.length && !size) { setMessage('Please select a size.'); return; }
+    if (colors.length && !color) { setMessage('Please select a color.'); return; }
+    for (let index = 0; index < quantity; index += 1) onAdd(product, { size, color });
+    setMessage('Added to cart.');
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black">
       <Header cartCount={cartCount} />
       <main className="mx-auto grid max-w-[1440px] gap-10 px-5 py-10 md:px-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
-          <div className="overflow-hidden rounded-[28px] bg-white p-4 shadow-md">
-            <img src={product.images?.[0]?.url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1200&q=80'} alt={product.name} className="h-[620px] w-full rounded-[20px] object-cover" />
-          </div>
+          <motion.div key={selectedImage} initial={{ opacity: 0.5 }} animate={{ opacity: 1 }} className="overflow-hidden rounded-[28px] bg-white p-4 shadow-md">
+            <img src={product.images?.[selectedImage]?.url || product.images?.[0]?.url} alt={product.images?.[selectedImage]?.alt || product.name} className="h-[620px] w-full rounded-[20px] object-contain" />
+          </motion.div>
+          <div className="mt-4 flex gap-3 overflow-x-auto">{(product.images || []).map((image, index) => <button key={image.id || image.url} onClick={() => setSelectedImage(index)} className={`h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${selectedImage === index ? 'border-black' : 'border-transparent'}`}><img src={image.url} alt={image.alt || product.name} className="h-full w-full object-cover" /></button>)}</div>
         </div>
         <div className="flex flex-col justify-center">
           <p className="text-[11px] uppercase tracking-[0.28em] text-black/60">{product.category?.name || 'Essential'}</p>
@@ -391,9 +418,12 @@ function ProductPage({ cartCount, onAdd }) {
             {product.compareAtPrice && <span className="text-lg text-black/45 line-through">{currency(product.compareAtPrice)}</span>}
           </div>
           <p className="mt-5 text-black/70">{product.description}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <button onClick={() => onAdd(product)} className="rounded-full bg-raw-accent px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-white">Add to cart</button>
-            <button className="rounded-full border border-black/15 bg-white px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-black">Wishlist</button>
+          <div className="mt-8 space-y-5">
+            {colors.length > 0 && <div><p className="mb-2 text-xs uppercase tracking-[0.2em]">Color</p><div className="flex flex-wrap gap-2">{colors.map((option) => <button key={option} onClick={() => setColor(option)} className={`rounded-full border px-4 py-2 text-xs uppercase ${color === option ? 'border-black bg-black text-white' : 'border-black/20 bg-white'}`}>{option}</button>)}</div></div>}
+            {sizes.length > 0 && <div><p className="mb-2 text-xs uppercase tracking-[0.2em]">Size</p><div className="flex flex-wrap gap-2">{sizes.map((option) => <button key={option} onClick={() => setSize(option)} className={`min-w-12 rounded-lg border px-3 py-2 text-xs ${size === option ? 'border-black bg-black text-white' : 'border-black/20 bg-white'}`}>{option}</button>)}</div></div>}
+            <div className="flex items-center gap-3"><button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="h-10 w-10 rounded-full border">−</button><span>{quantity}</span><button onClick={() => setQuantity(Math.min(Number(product.stock || 1), quantity + 1))} className="h-10 w-10 rounded-full border">+</button><span className="text-sm text-black/60">{product.stock > 0 ? `${product.stock} available` : 'Out of stock'}</span></div>
+            {message && <p className="text-sm text-raw-accent">{message}</p>}
+            <div className="flex flex-wrap gap-3"><button disabled={!product.stock} onClick={addSelected} className="rounded-full bg-raw-accent px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-white disabled:opacity-40">Add to cart</button><button onClick={() => onWishlist(product)} className="rounded-full border border-black/15 bg-white px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-black">{wished ? '♥ Wishlisted' : '♡ Wishlist'}</button></div>
           </div>
           <div className="mt-8 grid gap-4 rounded-[24px] border border-black/10 bg-white p-5">
             <div><strong>Sizes:</strong> {(product.sizes || []).join(', ') || 'One Size'}</div>
@@ -407,6 +437,7 @@ function ProductPage({ cartCount, onAdd }) {
 }
 
 function CheckoutPage({ cart, clearCart }) {
+  const navigate = useNavigate();
   const [submitted, setSubmitted] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -417,11 +448,19 @@ function CheckoutPage({ cart, clearCart }) {
     const response = await fetch(`${API_URL}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.get('email'), name: form.get('name'), phone: form.get('phone'), shippingAddress: { line1: form.get('address'), city: form.get('city'), postalCode: form.get('postalCode'), country: 'India' }, items: cart, total: subtotal, paymentMethod: form.get('paymentMethod') }) });
     const result = await response.json(); setLoading(false);
     if (!response.ok) { setError(result.message || 'Unable to place order.'); return; }
-    clearCart(); setSubmitted(result);
+    clearCart(); navigate(`/order-success/${result.id}`);
   };
   if (!cart.length && !submitted) return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[900px] px-5 py-12"><h1 className="text-4xl font-semibold">Checkout</h1><p className="mt-6">Your cart is empty.</p></main></div>;
   if (submitted) return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[700px] px-5 py-20 text-center"><p className="text-xs uppercase tracking-[0.25em]">Order confirmed</p><h1 className="mt-4 text-5xl font-semibold">Thank you for your order.</h1><p className="mt-5">Order {submitted.orderNumber} is confirmed. Payment is pending and will be collected by cash on delivery.</p><Link to="/shop" className="mt-8 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Continue shopping</Link></main></div>;
   return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header cartCount={cart.length} /><main className="mx-auto grid max-w-[1100px] gap-8 px-5 py-12 lg:grid-cols-[1fr_0.8fr]"><form onSubmit={submitOrder} className="space-y-4 rounded-[28px] bg-white p-7 shadow-md"><h1 className="text-4xl font-semibold">Checkout</h1>{['name','email','phone','address','city','postalCode'].map((field) => <input key={field} name={field} required className="w-full rounded-xl border border-black/15 px-4 py-3" placeholder={field === 'postalCode' ? 'Postal code' : field[0].toUpperCase() + field.slice(1)} />)}<select name="paymentMethod" className="w-full rounded-xl border border-black/15 px-4 py-3"><option value="cod">Cash on delivery</option><option value="pending">Payment pending</option></select>{error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}<button disabled={loading} className="w-full rounded-full bg-raw-accent px-6 py-4 text-xs uppercase tracking-[0.2em] text-white">{loading ? 'Placing order...' : 'Place order'}</button></form><aside className="rounded-[28px] bg-[#171b1d] p-7 text-white"><h2 className="text-2xl font-semibold">Order summary</h2>{cart.map((item) => <div key={item.key} className="mt-4 flex justify-between gap-4 text-sm"><span>{item.name} × {item.quantity}</span><span>{currency(item.price * item.quantity)}</span></div>)}<div className="mt-8 border-t border-white/15 pt-5 text-xl">Total <span className="float-right">{currency(subtotal)}</span></div></aside></main></div>;
+}
+
+function OrderSuccessPage() {
+  const { id } = useParams();
+  const [order, setOrder] = useState(null);
+  useEffect(() => { fetch(`${API_URL}/orders/${id}`).then((res) => res.json()).then(setOrder).catch(() => {}); }, [id]);
+  if (!order) return <div className="min-h-screen bg-[#f4f1ea] p-10 text-black">Loading order...</div>;
+  return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[760px] px-5 py-16"><div className="rounded-[28px] bg-white p-8 shadow-md"><p className="text-xs uppercase tracking-[0.25em] text-raw-accent">✓ Order confirmed</p><h1 className="mt-4 text-4xl font-semibold">Thank you for your order.</h1><p className="mt-4 text-black/65">Order #{order.orderNumber} · {order.paymentMethod === 'cod' ? 'Cash on delivery' : 'Payment pending'}</p><div className="mt-8 space-y-3 border-t border-black/10 pt-5">{order.items.map((item) => <div key={`${item.productId}-${item.size}-${item.color}`} className="flex justify-between"><span>{item.name} × {item.quantity}</span><span>{currency(item.price * item.quantity)}</span></div>)}<div className="flex justify-between border-t border-black/10 pt-4 text-xl font-semibold"><span>Total</span><span>{currency(order.total)}</span></div></div><Link to="/shop" className="mt-8 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Continue shopping</Link></div></main></div>;
 }
 
 function CartPage({ cart, updateQuantity, removeFromCart }) {
@@ -436,18 +475,26 @@ function CartPage({ cart, updateQuantity, removeFromCart }) {
   );
 }
 
+function WishlistPage({ wishlist, onWishlist, onAdd, cartCount }) {
+  return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header cartCount={cartCount} /><main className="mx-auto max-w-[1440px] px-5 py-12 md:px-10"><div className="flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.25em] text-black/55">Saved pieces</p><h1 className="mt-3 text-4xl font-semibold">Wishlist</h1></div><Link to="/shop" className="rounded-full border border-black/15 px-4 py-2 text-xs uppercase tracking-[0.18em]">Continue shopping</Link></div>{!wishlist.length ? <div className="mt-10 rounded-[28px] bg-white p-12 text-center text-black/60">Your wishlist is empty.</div> : <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">{wishlist.map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} onWishlist={onWishlist} wished />)}</div>}</main></div>;
+}
+
 function App() {
   const cartState = useCart();
+  const wishlistState = useWishlist();
   const cartCount = cartState.cart.reduce((sum, item) => sum + item.quantity, 0);
   return (
     <Routes>
-      <Route path="/" element={<HomePage cartCount={cartCount} onAdd={cartState.addToCart} />} />
-      <Route path="/shop" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
-      <Route path="/men" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
-      <Route path="/women" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
-      <Route path="/product/:id" element={<ProductPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
+      <Route path="/" element={<HomePage cartCount={cartCount} onAdd={cartState.addToCart} onWishlist={wishlistState.toggleWishlist} wishlist={wishlistState.wishlist} />} />
+      <Route path="/shop" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} onWishlist={wishlistState.toggleWishlist} wishlist={wishlistState.wishlist} />} />
+      <Route path="/men" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} onWishlist={wishlistState.toggleWishlist} wishlist={wishlistState.wishlist} />} />
+      <Route path="/women" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} onWishlist={wishlistState.toggleWishlist} wishlist={wishlistState.wishlist} />} />
+      <Route path="/products/:id" element={<ProductPage cartCount={cartCount} onAdd={cartState.addToCart} onWishlist={wishlistState.toggleWishlist} wishlist={wishlistState.wishlist} />} />
+      <Route path="/product/:id" element={<ProductPage cartCount={cartCount} onAdd={cartState.addToCart} onWishlist={wishlistState.toggleWishlist} wishlist={wishlistState.wishlist} />} />
       <Route path="/cart" element={<CartPage cart={cartState.cart} updateQuantity={cartState.updateQuantity} removeFromCart={cartState.removeFromCart} />} />
       <Route path="/checkout" element={<CheckoutPage cart={cartState.cart} clearCart={cartState.clearCart} />} />
+      <Route path="/order-success/:id" element={<OrderSuccessPage />} />
+      <Route path="/wishlist" element={<WishlistPage wishlist={wishlistState.wishlist} onWishlist={wishlistState.toggleWishlist} onAdd={cartState.addToCart} cartCount={cartCount} />} />
       <Route path="*" element={<HomePage />} />
     </Routes>
   );

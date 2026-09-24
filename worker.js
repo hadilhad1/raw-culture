@@ -52,6 +52,7 @@ function productFromRow(row, images, videos) {
     sku: row.sku,
     description: row.description,
     price: row.price,
+    compareAtPrice: row.sale_price < row.price ? row.price + 20 : null,
     salePrice: row.sale_price,
     costPrice: row.cost_price,
     stock: row.stock,
@@ -104,23 +105,42 @@ async function databaseApi(request, url, db) {
     return Response.json(await Promise.all(rows.results.map(async (row) => productFromRow(row, (await db.prepare('SELECT id, url, alt, ordering FROM product_images WHERE product_id = ? ORDER BY ordering').bind(row.id).all()).results, (await db.prepare('SELECT id, url FROM product_videos WHERE product_id = ?').bind(row.id).all()).results))));
   }
   if (request.method === 'GET' && path.startsWith('/products/')) {
-    const id = path.split('/').pop();
-    const row = await db.prepare('SELECT * FROM products WHERE id = ?').bind(id).first();
+    const identifier = path.split('/').pop();
+    const row = await db.prepare('SELECT * FROM products WHERE id = ? OR slug = ?').bind(identifier, identifier).first();
     if (!row) return Response.json({ message: 'Product not found' }, { status: 404 });
-    return Response.json(productFromRow(row, (await db.prepare('SELECT id, url, alt, ordering FROM product_images WHERE product_id = ? ORDER BY ordering').bind(id).all()).results, []));
+    return Response.json(productFromRow(row, (await db.prepare('SELECT id, url, alt, ordering FROM product_images WHERE product_id = ? ORDER BY ordering').bind(row.id).all()).results, []));
   }
   if (request.method === 'POST' && path === '/orders') {
     const body = await request.json();
     if (!body.email || !body.name || !Array.isArray(body.items) || !body.items.length) return Response.json({ message: 'Name, email, and cart items are required' }, { status: 400 });
+    const productRows = await db.prepare('SELECT id, price, sale_price, stock FROM products WHERE id IN (' + body.items.map(() => '?').join(',') + ')').bind(...body.items.map((item) => item.productId)).all();
+    const productsById = new Map(productRows.results.map((row) => [row.id, row]));
+    let calculatedTotal = 0;
+    for (const item of body.items) {
+      const product = productsById.get(item.productId);
+      if (!product) return Response.json({ message: `Product unavailable: ${item.name}` }, { status: 400 });
+      if (Number(item.quantity) < 1 || Number(item.quantity) > Number(product.stock)) return Response.json({ message: `${item.name} does not have enough stock` }, { status: 400 });
+      calculatedTotal += Number(product.sale_price || product.price) * Number(item.quantity);
+    }
     const orderId = `order-${crypto.randomUUID()}`;
     const orderNumber = `RC-${Date.now().toString().slice(-8)}`;
-    const total = Number(body.total || 0);
-    await db.prepare('INSERT INTO orders (id, order_number, email, name, phone, shipping_address, items, subtotal, total, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(orderId, orderNumber, body.email, body.name, body.phone || '', JSON.stringify(body.shippingAddress || {}), JSON.stringify(body.items), total, total, body.paymentMethod || 'cod').run();
-    return Response.json({ id: orderId, orderNumber, status: 'PENDING', paymentStatus: 'PENDING' }, { status: 201 });
+    await db.prepare('INSERT INTO orders (id, order_number, email, name, phone, shipping_address, items, subtotal, total, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(orderId, orderNumber, body.email, body.name, body.phone || '', JSON.stringify(body.shippingAddress || {}), JSON.stringify(body.items), calculatedTotal, calculatedTotal, body.paymentMethod || 'cod').run();
+    return Response.json({ id: orderId, orderNumber, status: 'PENDING', paymentStatus: 'PENDING', total: calculatedTotal }, { status: 201 });
   }
   if (request.method === 'GET' && path === '/orders') {
     const result = await db.prepare('SELECT id, order_number AS orderNumber, email, name, phone, total, status, payment_status AS paymentStatus, created_at AS createdAt FROM orders ORDER BY created_at DESC').all();
     return Response.json(result.results);
+  }
+  if (request.method === 'GET' && path.startsWith('/orders/')) {
+    const order = await db.prepare('SELECT id, order_number AS orderNumber, email, name, phone, shipping_address AS shippingAddress, items, total, status, payment_status AS paymentStatus, payment_method AS paymentMethod, created_at AS createdAt FROM orders WHERE id = ? OR order_number = ?').bind(path.split('/').pop(), path.split('/').pop()).first();
+    return order ? Response.json({ ...order, items: JSON.parse(order.items), shippingAddress: JSON.parse(order.shippingAddress) }) : Response.json({ message: 'Order not found' }, { status: 404 });
+  }
+  if (request.method === 'PATCH' && path.match(/^\/orders\/[^/]+\/status$/)) {
+    const allowed = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+    const body = await request.json();
+    if (!allowed.includes(body.status)) return Response.json({ message: 'Invalid order status' }, { status: 400 });
+    await db.prepare('UPDATE orders SET status = ? WHERE id = ? OR order_number = ?').bind(body.status, path.split('/')[2], path.split('/')[2]).run();
+    return Response.json({ success: true, status: body.status });
   }
   if (request.method === 'POST' || request.method === 'PUT') {
     const body = await request.json();
