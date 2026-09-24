@@ -11,7 +11,11 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'raw-culture-dev-secret';
-const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  ...(process.env.CORS_ORIGIN || '').split(',').map((origin) => origin.trim()).filter(Boolean),
+];
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -238,7 +242,7 @@ app.get('/api/content/homepage', async (req, res) => {
     heroSubtitle: 'Premium streetwear for the next generation.',
     heroButton1: 'Shop Men',
     heroButton2: 'Shop Women',
-    heroImage: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1600&q=80',
+    heroImage: 'https://images.pexels.com/photos/994523/pexels-photo-994523.jpeg?auto=compress&cs=tinysrgb&w=1600',
     heroVideo: 'https://videos.pexels.com/video-files/6487458/6487458-hd_1920_1080.mp4',
     brandStory: 'RAW-CULTURE blends modern staples with urban confidence and elevated everyday essentials.',
     newsletterTitle: 'Join the RAW-CULTURE list',

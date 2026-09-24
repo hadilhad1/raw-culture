@@ -2,7 +2,7 @@ import { Link, NavLink, Route, Routes, useNavigate, useParams } from 'react-rout
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/api');
 const currency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
 
 function useProducts() {
@@ -36,7 +36,7 @@ function useHomepageContent() {
     heroSubtitle: 'Premium streetwear for the next generation.',
     heroButton1: 'Shop Men',
     heroButton2: 'Shop Women',
-    heroImage: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1600&q=80',
+    heroImage: 'https://images.pexels.com/photos/994523/pexels-photo-994523.jpeg?auto=compress&cs=tinysrgb&w=1600',
     heroVideo: 'https://videos.pexels.com/video-files/6487458/6487458-hd_1920_1080.mp4',
     brandStory: 'RAW-CULTURE blends modern staples with urban confidence and elevated everyday essentials.',
     newsletterTitle: 'Join the RAW-CULTURE list',
