@@ -275,6 +275,22 @@ async function ensureDatabase(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS store_settings (id TEXT PRIMARY KEY, store_name TEXT NOT NULL DEFAULT \'RAW-CULTURE\', currency TEXT NOT NULL DEFAULT \'INR\', support_email TEXT NOT NULL DEFAULT \'support@rawculture.com\', phone TEXT NOT NULL DEFAULT \'+91 98765 43210\', address TEXT NOT NULL DEFAULT \'Mumbai, India\', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)'),
   ]);
 
+  const orderInfo = await db.prepare('PRAGMA table_info(orders)').all();
+  const existingOrderColumns = new Set((orderInfo.results || []).map((column) => column.name));
+  const legacyOrderColumns = [
+    'shipping_fee',
+    'discount',
+    'tracking_number',
+    'shipping_provider',
+    'notes',
+  ];
+
+  for (const columnName of legacyOrderColumns) {
+    if (!existingOrderColumns.has(columnName)) {
+      await db.prepare(`ALTER TABLE orders ADD COLUMN ${columnName} TEXT`).run();
+    }
+  }
+
   const count = await db.prepare('SELECT COUNT(*) AS count FROM products').first();
   if (Number(count.count) > 0) return;
 

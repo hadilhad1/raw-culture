@@ -127,9 +127,37 @@ function useHomepageContent() {
 
 function ProductCard({ product, onAdd, onWishlist, wished }) {
   const [image, setImage] = useState(product.images?.[0]?.url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80');
+  const [isAdded, setIsAdded] = useState(false);
+
+  useEffect(() => {
+    if (!isAdded) return;
+    const timer = setTimeout(() => setIsAdded(false), 420);
+    return () => clearTimeout(timer);
+  }, [isAdded]);
+
+  const handleAddToCart = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onAdd(product);
+    setIsAdded(true);
+  };
+
+  const handleWishlist = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onWishlist(product);
+  };
 
   return (
-    <motion.article initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45 }} className="product-card group relative overflow-hidden rounded-[26px] bg-white shadow-raw" whileHover={{ y: -6 }}>
+    <motion.article
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.45 }}
+      className="product-card group relative overflow-hidden rounded-[26px] bg-white shadow-raw"
+      whileHover={{ y: -6, scale: 1.01 }}
+      animate={isAdded ? { scale: [1, 1.03, 1], rotate: [0, -1.5, 1.5, 0] } : { scale: 1, rotate: 0 }}
+    >
       <div className="relative aspect-[4/5] overflow-hidden bg-[#ece7df]">
         <Link to={`/products/${product.slug || product.id}`} aria-label={`View ${product.name}`} className="absolute inset-0 z-0" />
         <img src={image} alt={product.name} className="pointer-events-none h-full w-full object-cover" onMouseEnter={() => setImage(product.images?.[1]?.url || product.images?.[0]?.url || image)} onMouseLeave={() => setImage(product.images?.[0]?.url || image)} />
@@ -137,8 +165,24 @@ function ProductCard({ product, onAdd, onWishlist, wished }) {
           {product.newArrival && <span className="rounded-full bg-raw-lime px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black">New</span>}
           {product.compareAtPrice && <span className="rounded-full bg-black px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white">Sale</span>}
         </div>
-        <button onClick={(event) => { event.preventDefault(); event.stopPropagation(); onWishlist(product); }} className={`absolute right-4 top-4 z-10 rounded-full border border-black/10 bg-white/80 p-2 text-sm transition hover:scale-110 ${wished ? 'text-red-600' : ''}`}>{wished ? '♥' : '♡'}</button>
-        <button onClick={(event) => { event.preventDefault(); event.stopPropagation(); onAdd(product); }} className="absolute bottom-4 left-4 z-10 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100">Add to cart</button>
+        <motion.button
+          type="button"
+          onClick={handleWishlist}
+          whileTap={{ scale: 0.82 }}
+          animate={{ scale: wished ? [1, 1.25, 1] : 1, rotate: wished ? [0, -10, 8, 0] : 0 }}
+          transition={{ duration: 0.3 }}
+          className={`absolute right-4 top-4 z-10 rounded-full border border-black/10 bg-white/80 p-2 text-sm transition ${wished ? 'text-red-600' : ''}`}
+        >
+          {wished ? '♥' : '♡'}
+        </motion.button>
+        <motion.button
+          type="button"
+          onClick={handleAddToCart}
+          whileTap={{ scale: 0.96 }}
+          className="absolute bottom-4 left-4 z-10 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100"
+        >
+          {isAdded ? 'Added!' : 'Add to cart'}
+        </motion.button>
       </div>
       <div className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-2">
