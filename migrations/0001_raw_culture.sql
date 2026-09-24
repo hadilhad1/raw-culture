@@ -55,3 +55,4 @@ CREATE TABLE IF NOT EXISTS homepage_content (
   newsletter_title TEXT NOT NULL,
   newsletter_copy TEXT NOT NULL
 );
+

@@ -3,7 +3,27 @@ import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:4000/api' : '/backend/api');
-const currency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0));
+const currency = (value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(value || 0));
+
+function useCart() {
+  const [cart, setCart] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('raw-culture-cart') || '[]'); } catch { return []; }
+  });
+
+  useEffect(() => { localStorage.setItem('raw-culture-cart', JSON.stringify(cart)); }, [cart]);
+
+  const addToCart = (product, options = {}) => {
+    const key = `${product.id}-${options.size || 'One Size'}-${options.color || 'Standard'}`;
+    setCart((items) => {
+      const existing = items.find((item) => item.key === key);
+      if (existing) return items.map((item) => item.key === key ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...items, { key, productId: product.id, name: product.name, price: Number(product.salePrice || product.price), image: product.images?.[0]?.url, size: options.size || product.sizes?.[0] || 'One Size', color: options.color || product.colors?.[0] || 'Standard', quantity: 1 }];
+    });
+  };
+  const updateQuantity = (key, quantity) => setCart((items) => items.map((item) => item.key === key ? { ...item, quantity: Math.max(0, quantity) } : item).filter((item) => item.quantity > 0));
+  const removeFromCart = (key) => setCart((items) => items.filter((item) => item.key !== key));
+  return { cart, addToCart, updateQuantity, removeFromCart, clearCart: () => setCart([]) };
+}
 
 function useProducts() {
   const [products, setProducts] = useState([]);
@@ -55,7 +75,7 @@ function useHomepageContent() {
   return content;
 }
 
-function ProductCard({ product }) {
+function ProductCard({ product, onAdd }) {
   const [image, setImage] = useState(product.images?.[0]?.url || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80');
 
   return (
@@ -67,7 +87,7 @@ function ProductCard({ product }) {
           {product.compareAtPrice && <span className="rounded-full bg-black px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white">Sale</span>}
         </div>
         <button className="absolute right-4 top-4 rounded-full border border-black/10 bg-white/80 p-2 text-sm transition hover:scale-105">♡</button>
-        <Link to={`/product/${product.id}`} className="absolute bottom-4 left-4 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100">Quick view</Link>
+        <button onClick={() => onAdd(product)} className="absolute bottom-4 left-4 rounded-full bg-black px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-white opacity-0 transition duration-300 hover:bg-raw-accent group-hover:opacity-100">Add to cart</button>
       </div>
       <div className="space-y-3 p-5">
         <div className="flex items-start justify-between gap-2">
@@ -102,7 +122,7 @@ function SectionTitle({ eyebrow, title, action }) {
   );
 }
 
-function Header() {
+function Header({ cartCount = 0 }) {
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#111315]/90 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 md:px-10">
@@ -117,14 +137,14 @@ function Header() {
         </div>
         <div className="flex items-center gap-4 text-xs uppercase tracking-[0.18em] text-white/70">
           <button className="transition hover:text-white">Search</button>
-          <Link to="/cart" className="transition hover:text-white">Cart (0)</Link>
+          <Link to="/cart" className="transition hover:text-white">Cart ({cartCount})</Link>
         </div>
       </div>
     </header>
   );
 }
 
-function HomePage() {
+function HomePage({ cartCount, onAdd }) {
   const { products, loading, error } = useProducts();
   const content = useHomepageContent();
   const featuredProducts = useMemo(() => (products || []).filter((product) => product.featured).slice(0, 4), [products]);
@@ -132,7 +152,7 @@ function HomePage() {
 
   return (
     <div className="app-shell min-h-screen text-white">
-      <Header />
+      <Header cartCount={cartCount} />
       <div className="mx-auto flex max-w-[1440px] items-center justify-center bg-[#171b1d] px-4 py-3 text-center text-[10px] font-medium uppercase tracking-[0.26em] text-raw-silver">
         Free worldwide shipping over $200 • New drop now live
       </div>
@@ -188,7 +208,7 @@ function HomePage() {
           <div className="mx-auto max-w-[1440px]">
             <SectionTitle eyebrow="New Arrivals" title="Fresh lines for the season" action="View all" />
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4 text-black">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : featuredProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+              {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4 text-black">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : featuredProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} />)}
             </div>
           </div>
         </section>
@@ -235,7 +255,7 @@ function HomePage() {
           <div className="mx-auto max-w-[1440px]">
             <SectionTitle eyebrow="Trending now" title="Most wanted essentials" action="Shop all" />
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {(trendingProducts || []).map((product) => <ProductCard key={product.id} product={product} />)}
+              {(trendingProducts || []).map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} />)}
             </div>
           </div>
         </section>
@@ -313,12 +333,12 @@ function HomePage() {
   );
 }
 
-function CatalogPage() {
+function CatalogPage({ cartCount, onAdd }) {
   const { products, loading, error } = useProducts();
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black">
-      <Header />
+      <Header cartCount={cartCount} />
       <main className="mx-auto max-w-[1440px] px-5 py-10 md:px-10">
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -329,14 +349,14 @@ function CatalogPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : (products || []).map((product) => <ProductCard key={product.id} product={product} />)}
+          {loading ? <div className="col-span-full rounded-full border border-black/10 bg-white px-6 py-4">Loading products...</div> : error ? <div className="col-span-full rounded-full border border-red-300 bg-red-50 px-6 py-4 text-red-700">{error}</div> : (products || []).map((product) => <ProductCard key={product.id} product={product} onAdd={onAdd} />)}
         </div>
       </main>
     </div>
   );
 }
 
-function ProductPage() {
+function ProductPage({ cartCount, onAdd }) {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -356,7 +376,7 @@ function ProductPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black">
-      <Header />
+      <Header cartCount={cartCount} />
       <main className="mx-auto grid max-w-[1440px] gap-10 px-5 py-10 md:px-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <div className="overflow-hidden rounded-[28px] bg-white p-4 shadow-md">
@@ -372,7 +392,7 @@ function ProductPage() {
           </div>
           <p className="mt-5 text-black/70">{product.description}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <button className="rounded-full bg-raw-accent px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-white">Add to cart</button>
+            <button onClick={() => onAdd(product)} className="rounded-full bg-raw-accent px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-white">Add to cart</button>
             <button className="rounded-full border border-black/15 bg-white px-6 py-3 text-[10px] uppercase tracking-[0.22em] text-black">Wishlist</button>
           </div>
           <div className="mt-8 grid gap-4 rounded-[24px] border border-black/10 bg-white p-5">
@@ -386,27 +406,48 @@ function ProductPage() {
   );
 }
 
-function CartPage() {
+function CheckoutPage({ cart, clearCart }) {
+  const [submitted, setSubmitted] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const submitOrder = async (event) => {
+    event.preventDefault(); setLoading(true); setError('');
+    const form = new FormData(event.currentTarget);
+    const response = await fetch(`${API_URL}/orders`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.get('email'), name: form.get('name'), phone: form.get('phone'), shippingAddress: { line1: form.get('address'), city: form.get('city'), postalCode: form.get('postalCode'), country: 'India' }, items: cart, total: subtotal, paymentMethod: form.get('paymentMethod') }) });
+    const result = await response.json(); setLoading(false);
+    if (!response.ok) { setError(result.message || 'Unable to place order.'); return; }
+    clearCart(); setSubmitted(result);
+  };
+  if (!cart.length && !submitted) return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[900px] px-5 py-12"><h1 className="text-4xl font-semibold">Checkout</h1><p className="mt-6">Your cart is empty.</p></main></div>;
+  if (submitted) return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header /><main className="mx-auto max-w-[700px] px-5 py-20 text-center"><p className="text-xs uppercase tracking-[0.25em]">Order confirmed</p><h1 className="mt-4 text-5xl font-semibold">Thank you for your order.</h1><p className="mt-5">Order {submitted.orderNumber} is confirmed. Payment is pending and will be collected by cash on delivery.</p><Link to="/shop" className="mt-8 inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Continue shopping</Link></main></div>;
+  return <div className="min-h-screen bg-[#f4f1ea] text-black"><Header cartCount={cart.length} /><main className="mx-auto grid max-w-[1100px] gap-8 px-5 py-12 lg:grid-cols-[1fr_0.8fr]"><form onSubmit={submitOrder} className="space-y-4 rounded-[28px] bg-white p-7 shadow-md"><h1 className="text-4xl font-semibold">Checkout</h1>{['name','email','phone','address','city','postalCode'].map((field) => <input key={field} name={field} required className="w-full rounded-xl border border-black/15 px-4 py-3" placeholder={field === 'postalCode' ? 'Postal code' : field[0].toUpperCase() + field.slice(1)} />)}<select name="paymentMethod" className="w-full rounded-xl border border-black/15 px-4 py-3"><option value="cod">Cash on delivery</option><option value="pending">Payment pending</option></select>{error && <p className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}<button disabled={loading} className="w-full rounded-full bg-raw-accent px-6 py-4 text-xs uppercase tracking-[0.2em] text-white">{loading ? 'Placing order...' : 'Place order'}</button></form><aside className="rounded-[28px] bg-[#171b1d] p-7 text-white"><h2 className="text-2xl font-semibold">Order summary</h2>{cart.map((item) => <div key={item.key} className="mt-4 flex justify-between gap-4 text-sm"><span>{item.name} × {item.quantity}</span><span>{currency(item.price * item.quantity)}</span></div>)}<div className="mt-8 border-t border-white/15 pt-5 text-xl">Total <span className="float-right">{currency(subtotal)}</span></div></aside></main></div>;
+}
+
+function CartPage({ cart, updateQuantity, removeFromCart }) {
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black">
-      <Header />
+      <Header cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} />
       <main className="mx-auto max-w-[900px] px-5 py-12 md:px-10">
         <h1 className="text-4xl font-semibold tracking-[-0.06em]">Your cart</h1>
-        <div className="mt-8 rounded-[28px] bg-white p-8 text-center text-black/60 shadow-md">Your cart is empty right now.</div>
+        {!cart.length ? <div className="mt-8 rounded-[28px] bg-white p-8 text-center text-black/60 shadow-md">Your cart is empty right now.</div> : <div className="mt-8 space-y-4">{cart.map((item) => <div key={item.key} className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-sm"><img src={item.image} alt={item.name} className="h-24 w-20 rounded-xl object-cover" /><div className="flex-1"><h2 className="font-semibold">{item.name}</h2><p className="text-sm text-black/55">{item.size} / {item.color}</p><p>{currency(item.price)}</p></div><input type="number" min="1" value={item.quantity} onChange={(event) => updateQuantity(item.key, Number(event.target.value))} className="w-16 rounded-lg border p-2" /><button onClick={() => removeFromCart(item.key)} className="text-xs uppercase tracking-[0.15em] text-red-600">Remove</button></div>)}<Link to="/checkout" className="inline-flex rounded-full bg-black px-6 py-3 text-xs uppercase tracking-[0.2em] text-white">Checkout</Link></div>}
       </main>
     </div>
   );
 }
 
 function App() {
+  const cartState = useCart();
+  const cartCount = cartState.cart.reduce((sum, item) => sum + item.quantity, 0);
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/shop" element={<CatalogPage />} />
-      <Route path="/men" element={<CatalogPage />} />
-      <Route path="/women" element={<CatalogPage />} />
-      <Route path="/product/:id" element={<ProductPage />} />
-      <Route path="/cart" element={<CartPage />} />
+      <Route path="/" element={<HomePage cartCount={cartCount} onAdd={cartState.addToCart} />} />
+      <Route path="/shop" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
+      <Route path="/men" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
+      <Route path="/women" element={<CatalogPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
+      <Route path="/product/:id" element={<ProductPage cartCount={cartCount} onAdd={cartState.addToCart} />} />
+      <Route path="/cart" element={<CartPage cart={cartState.cart} updateQuantity={cartState.updateQuantity} removeFromCart={cartState.removeFromCart} />} />
+      <Route path="/checkout" element={<CheckoutPage cart={cartState.cart} clearCart={cartState.clearCart} />} />
       <Route path="*" element={<HomePage />} />
     </Routes>
   );

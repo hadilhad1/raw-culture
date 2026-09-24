@@ -75,6 +75,7 @@ async function ensureDatabase(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS product_images (id TEXT PRIMARY KEY, product_id TEXT NOT NULL, url TEXT NOT NULL, alt TEXT NOT NULL DEFAULT \'\', ordering INTEGER NOT NULL DEFAULT 0)'),
     db.prepare('CREATE TABLE IF NOT EXISTS product_videos (id TEXT PRIMARY KEY, product_id TEXT NOT NULL, url TEXT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS homepage_content (id INTEGER PRIMARY KEY CHECK (id = 1), hero_title TEXT NOT NULL, hero_subtitle TEXT NOT NULL, hero_button1 TEXT NOT NULL, hero_button2 TEXT NOT NULL, hero_image TEXT NOT NULL, hero_video TEXT NOT NULL, brand_story TEXT NOT NULL, newsletter_title TEXT NOT NULL, newsletter_copy TEXT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, order_number TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT NOT NULL, phone TEXT NOT NULL, shipping_address TEXT NOT NULL, items TEXT NOT NULL, subtotal REAL NOT NULL, total REAL NOT NULL, status TEXT NOT NULL DEFAULT \'PENDING\', payment_status TEXT NOT NULL DEFAULT \'PENDING\', payment_method TEXT NOT NULL DEFAULT \'cod\', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)'),
   ]);
   const count = await db.prepare('SELECT COUNT(*) AS count FROM products').first();
   if (Number(count.count) > 0) return;
@@ -107,6 +108,19 @@ async function databaseApi(request, url, db) {
     const row = await db.prepare('SELECT * FROM products WHERE id = ?').bind(id).first();
     if (!row) return Response.json({ message: 'Product not found' }, { status: 404 });
     return Response.json(productFromRow(row, (await db.prepare('SELECT id, url, alt, ordering FROM product_images WHERE product_id = ? ORDER BY ordering').bind(id).all()).results, []));
+  }
+  if (request.method === 'POST' && path === '/orders') {
+    const body = await request.json();
+    if (!body.email || !body.name || !Array.isArray(body.items) || !body.items.length) return Response.json({ message: 'Name, email, and cart items are required' }, { status: 400 });
+    const orderId = `order-${crypto.randomUUID()}`;
+    const orderNumber = `RC-${Date.now().toString().slice(-8)}`;
+    const total = Number(body.total || 0);
+    await db.prepare('INSERT INTO orders (id, order_number, email, name, phone, shipping_address, items, subtotal, total, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(orderId, orderNumber, body.email, body.name, body.phone || '', JSON.stringify(body.shippingAddress || {}), JSON.stringify(body.items), total, total, body.paymentMethod || 'cod').run();
+    return Response.json({ id: orderId, orderNumber, status: 'PENDING', paymentStatus: 'PENDING' }, { status: 201 });
+  }
+  if (request.method === 'GET' && path === '/orders') {
+    const result = await db.prepare('SELECT id, order_number AS orderNumber, email, name, phone, total, status, payment_status AS paymentStatus, created_at AS createdAt FROM orders ORDER BY created_at DESC').all();
+    return Response.json(result.results);
   }
   if (request.method === 'POST' || request.method === 'PUT') {
     const body = await request.json();
